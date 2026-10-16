@@ -1,0 +1,17 @@
+PROPRIETARY SOFTWARE LICENSE NOTICE
+
+Copyright (c) 2026 [LEGAL OWNER NAME]. All rights reserved.
+
+This software and its original source code are proprietary and confidential.
+No right to use, copy, modify, distribute, sublicense, host, or sell this
+software is granted except under a separate written commercial license or
+services agreement issued by the copyright owner.
+
+Third-party components included with or used by this software remain governed
+by their respective licenses. Their notices and license terms are provided in
+THIRD_PARTY_NOTICES.md and the licenses directory. Nothing in this notice
+restricts rights granted by those third-party licenses.
+
+IMPORTANT: Replace [LEGAL OWNER NAME] and have this notice and the applicable
+customer EULA or services agreement reviewed by qualified counsel before any
+commercial distribution. This notice alone is not a customer license agreement.
