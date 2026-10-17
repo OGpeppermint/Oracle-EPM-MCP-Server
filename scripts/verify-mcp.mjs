@@ -14,7 +14,7 @@ const client = new Client({ name: "oracle-epm-server-verifier", version: "1.0.0"
 const root = path.resolve(import.meta.dirname, "..");
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: [path.join(root, "dist/main.js"), "--stdio"],
+  args: ["--env-file-if-exists=.env", path.join(root, "dist/main.js"), "--stdio"],
   cwd: root,
 });
 try {

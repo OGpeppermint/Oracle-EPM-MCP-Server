@@ -42,7 +42,7 @@ Exit state: the project operates as a single-environment, read-only MCP server w
 
 ### Milestone 2: production configuration and operational hardening — Next
 
-- Adopt a documented production configuration strategy instead of relying on implicit `.env` loading.
+- Extend the documented configuration strategy for production deployment: npm startup commands load an optional local `.env`, and deployed environment variables take precedence.
 - Validate all required settings at startup with safe, actionable errors.
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
 - Restrict production CORS and document reverse-proxy, HTTPS, health-check, and shutdown behavior.

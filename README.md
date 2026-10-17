@@ -4,11 +4,14 @@ Read-only MCP server for Oracle EPM Planning / NSPB. It exposes application disc
 
 ## Setup
 
-1. Run `npm install`.
+1. Install Node.js 22.9 or newer, then run `npm install`.
 2. Copy `.env.example` to `.env` and provide the Oracle EPM service account and application name.
-3. Load the variables into your environment; the server does not load `.env` automatically.
-4. Run `npm run build` then `npm start`, or `npm run dev` during development.
-5. Connect any MCP host to `http://127.0.0.1:3001/mcp`. For stdio, use `npm run start:stdio`.
+3. Run `npm run build` then `npm start`, or `npm run dev` during development.
+4. Connect any MCP host to `http://127.0.0.1:3001/mcp`. For stdio, use `npm run start:stdio`.
+
+All npm server startup commands load the project-root `.env` automatically. Existing environment variables take precedence, and the file is optional so deployments can supply configuration through the environment. Restart the server after editing `.env`.
+
+When an MCP client launches Node directly, use `node --env-file-if-exists=/absolute/path/to/.env /absolute/path/to/dist/main.js --stdio`, or provide the variables through the client's environment settings.
 
 Oracle credentials are used only by the server.
 

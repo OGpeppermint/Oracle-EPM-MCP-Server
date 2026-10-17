@@ -4,14 +4,17 @@
     "private":  true,
     "license":  "GPL-3.0-only",
     "type":  "module",
+    "engines": {
+        "node": ">=22.9.0"
+    },
     "description":  "Read-only MCP server for Oracle EPM Planning / NSPB.",
     "scripts":  {
                     "build":  "tsc -p tsconfig.json",
-                    "dev":  "tsx --watch src/main.ts",
-                    "serve":  "tsx --watch src/main.ts",
-                    "serve:stdio":  "tsx src/main.ts --stdio",
-                    "start":  "node dist/main.js",
-                    "start:stdio":  "node dist/main.js --stdio",
+                    "dev":  "node --env-file-if-exists=.env --import tsx --watch src/main.ts",
+                    "serve":  "node --env-file-if-exists=.env --import tsx --watch src/main.ts",
+                    "serve:stdio":  "node --env-file-if-exists=.env --import tsx src/main.ts --stdio",
+                    "start":  "node --env-file-if-exists=.env dist/main.js",
+                    "start:stdio":  "node --env-file-if-exists=.env dist/main.js --stdio",
                     "check":  "tsc -p tsconfig.json --noEmit",
                     "verify:mcp":  "npm run build && node scripts/verify-mcp.mjs",
                     "notices":  "node scripts/generate-third-party-notices.mjs",
