@@ -2,6 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+const activeOracleRequests = new Map<AbortController, Promise<unknown>>();
+
+export async function closeOracleRequests(): Promise<void> {
+  const pending = [...activeOracleRequests];
+  for (const [controller] of pending) controller.abort();
+  await Promise.allSettled(pending.map(([, request]) => request));
+}
 
 const connectionSchema = z.object({
   configured: z.boolean().describe("True only when all required Oracle EPM environment variables are present on the MCP server."),
@@ -65,30 +72,39 @@ async function epmRequest<T>(pathName: string, init?: RequestInit, accept = "app
   headers.set("Accept", accept);
   if (init?.body === undefined) headers.delete("Content-Type");
   else if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(`${process.env.EPM_BASE_URL}${pathName}`, {
-    ...init,
-    headers,
-    signal: AbortSignal.timeout(30_000),
-  });
-  const body = await response.text();
-  if (!response.ok) {
-    const method = init?.method?.toUpperCase() ?? "GET";
-    const responseType = response.headers.get("content-type");
-    const typeDetails = responseType ? `; response content-type ${responseType}` : "";
-    throw new EpmHttpError(
-      `Oracle EPM ${method} ${pathName} returned ${response.status}${typeDetails}: ${body.slice(0, 500) || response.statusText}`,
-      response.status,
-      responseType,
-    );
-  }
-  if (!body) return {} as T;
-  const responseType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  if (responseType.includes("json")) return JSON.parse(body) as T;
-  if (responseType.includes("text/plain") || responseType.includes("text/markdown")) return body as T;
+  const controller = new AbortController();
+  const request = (async () => {
+    const response = await fetch(`${process.env.EPM_BASE_URL}${pathName}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.any([AbortSignal.timeout(30_000), controller.signal]),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      const method = init?.method?.toUpperCase() ?? "GET";
+      const responseType = response.headers.get("content-type");
+      const typeDetails = responseType ? `; response content-type ${responseType}` : "";
+      throw new EpmHttpError(
+        `Oracle EPM ${method} ${pathName} returned ${response.status}${typeDetails}: ${body.slice(0, 500) || response.statusText}`,
+        response.status,
+        responseType,
+      );
+    }
+    if (!body) return {} as T;
+    const responseType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (responseType.includes("json")) return JSON.parse(body) as T;
+    if (responseType.includes("text/plain") || responseType.includes("text/markdown")) return body as T;
+    try {
+      return JSON.parse(body) as T;
+    } catch {
+      throw new Error(`Oracle EPM returned an unsupported successful response content-type ${responseType || "unknown"} for ${pathName}.`);
+    }
+  })();
+  activeOracleRequests.set(controller, request);
   try {
-    return JSON.parse(body) as T;
-  } catch {
-    throw new Error(`Oracle EPM returned an unsupported successful response content-type ${responseType || "unknown"} for ${pathName}.`);
+    return await request;
+  } finally {
+    activeOracleRequests.delete(controller);
   }
 }
 

@@ -4,11 +4,24 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import cors from "cors";
 import type { Request, Response } from "express";
+import { createServer as createHttpServer } from "node:http";
 import { ConfigurationError, readHttpConfig, validateOracleConfig, type HttpConfig } from "./config.js";
-import { createServer } from "./server.js";
+import { closeOracleRequests, createServer } from "./server.js";
+import { manageHttpShutdown } from "./shutdown.js";
 
-async function startHttp(factory: () => McpServer, { host, port, allowedHosts, allowedOrigins }: HttpConfig): Promise<void> {
+async function startHttp(factory: () => McpServer, { host, port, allowedHosts, allowedOrigins, shutdownTimeoutMs }: HttpConfig): Promise<void> {
   const app = createMcpExpressApp({ host, allowedHosts });
+  const listener = createHttpServer(app);
+  const lifecycle = manageHttpShutdown(listener, shutdownTimeoutMs);
+  lifecycle.track(closeOracleRequests);
+  app.use((_req, res, next) => {
+    if (lifecycle.shuttingDown) {
+      res.setHeader("Connection", "close");
+      res.status(503).json({ error: "Server is shutting down." });
+      return;
+    }
+    next();
+  });
   app.use((req, res, next) => {
     res.vary("Origin");
     if (req.headers.origin !== undefined && !allowedOrigins.includes(req.headers.origin)) {
@@ -29,7 +42,9 @@ async function startHttp(factory: () => McpServer, { host, port, allowedHosts, a
   app.all("/mcp", async (req: Request, res: Response) => {
     const server = factory();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    res.on("close", () => { void transport.close(); void server.close(); });
+    // McpServer.close() also closes its connected transport.
+    const release = lifecycle.track(() => server.close(), req.method === "GET");
+    res.once("close", () => { void release(); });
     try {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
@@ -38,7 +53,7 @@ async function startHttp(factory: () => McpServer, { host, port, allowedHosts, a
       if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
     }
   });
-  const listener = app.listen(port, host, () => {
+  listener.listen(port, host, () => {
     const address = listener.address();
     const listeningPort = address && typeof address === "object" ? address.port : port;
     const urlHost = host.includes(":") ? `[${host}]` : host;

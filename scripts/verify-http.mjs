@@ -22,6 +22,7 @@ async function verifyHttp(allowedOrigins) {
       PORT: "0",
       MCP_ALLOWED_HOSTS: "127.0.0.1, mcp.test",
       MCP_ALLOWED_ORIGINS: allowedOrigins.join(","),
+      SHUTDOWN_TIMEOUT_MS: "2000",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

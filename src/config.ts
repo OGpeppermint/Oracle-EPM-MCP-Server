@@ -12,6 +12,7 @@ export type HttpConfig = {
   port: number;
   allowedHosts: string[];
   allowedOrigins: string[];
+  shutdownTimeoutMs: number;
 };
 
 function isHostname(value: string): boolean {
@@ -61,6 +62,11 @@ export function readHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig
   if (!/^\d+$/.test(rawPort) || !Number.isInteger(port) || port < 0 || port > 65535) {
     issues.push("PORT must be an integer between 0 and 65535. Use 0 only to request a temporary port.");
   }
+  const rawShutdownTimeout = env.SHUTDOWN_TIMEOUT_MS === undefined ? "25000" : env.SHUTDOWN_TIMEOUT_MS.trim();
+  const shutdownTimeoutMs = Number(rawShutdownTimeout);
+  if (!/^\d+$/.test(rawShutdownTimeout) || !Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 1 || shutdownTimeoutMs > 2147483647) {
+    issues.push("SHUTDOWN_TIMEOUT_MS must be an integer between 1 and 2147483647 milliseconds.");
+  }
   const allowedHosts = (env.MCP_ALLOWED_HOSTS ?? "localhost,127.0.0.1,[::1]")
     .split(",").map((value) => value.trim().toLowerCase());
   if (allowedHosts.some((value) => !isAllowedHostname(value))) {
@@ -84,5 +90,5 @@ export function readHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig
     }
   }
   if (issues.length) throw new ConfigurationError(issues);
-  return { host, port, allowedHosts: [...new Set(allowedHosts)], allowedOrigins: [...new Set(allowedOrigins)] };
+  return { host, port, allowedHosts: [...new Set(allowedHosts)], allowedOrigins: [...new Set(allowedOrigins)], shutdownTimeoutMs };
 }

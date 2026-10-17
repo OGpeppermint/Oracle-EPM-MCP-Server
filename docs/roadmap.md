@@ -51,7 +51,8 @@ Dependency audit baseline refreshed on 2026-10-17: upgraded the MCP SDK, fast-ur
 - **Complete:** validate the required Oracle URL and credentials at startup with safe, actionable errors; validate HTTP listening and hostname settings in HTTP mode. Keep the default application optional and cover these rules with `npm run verify:config`.
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
 - **Complete:** replace unrestricted `cors()` with the `MCP_ALLOWED_ORIGINS` browser-origin allowlist. Validate origin settings at startup; reject unapproved origins, support MCP preflight and browser response headers, and retain clients without an Origin header. `npm run verify:http` covers configured and empty allowlists, origin rejection, preflight, and browser MCP connectivity.
-- Document reverse-proxy, HTTPS, health-probe Host headers, and shutdown behavior. The existing `/health` route reports liveness without checking Oracle connectivity.
+- **Complete:** graceful HTTP shutdown on `SIGTERM` and `SIGINT`, with a configurable `SHUTDOWN_TIMEOUT_MS` deadline (25 seconds by default), request draining, notification-stream and idle-connection closure, MCP resource cleanup, and cancellation of abandoned Oracle reads. `npm run verify:shutdown` covers draining, repeated signals, timeout termination, abandoned reads, and cleanup using a mocked Oracle response.
+- Document reverse-proxy, HTTPS, and health-probe Host headers. The existing `/health` route reports liveness without checking Oracle connectivity.
 - Add automated HTTP transport tests for content negotiation, session behavior, and MCP error responses.
 - Establish supported Node.js and MCP SDK versions and an upgrade policy.
 - Add dependency, secret, and vulnerability scanning to the release workflow.

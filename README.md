@@ -23,6 +23,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 
 - `src/main.ts` starts the HTTP or stdio transport.
 - `src/config.ts` validates startup configuration without exposing credential values.
+- `src/shutdown.ts` handles HTTP shutdown signals, connection draining, and resource cleanup.
 - `src/server.ts` defines the MCP tools and Oracle EPM requests.
 - `scripts/` contains MCP verification and dependency-notice tooling.
 - `docs/` contains the tool reference and server roadmaps.
@@ -41,6 +42,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `HOST` | HTTP listening address; defaults to `127.0.0.1` |
 | `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
 | `MCP_ALLOWED_ORIGINS` | Comma-separated permitted HTTP/HTTPS browser origins; unset or empty allows no browser origins |
+| `SHUTDOWN_TIMEOUT_MS` | HTTP shutdown deadline in milliseconds; defaults to `25000` |
 
 For a container or remote deployment, set `HOST=0.0.0.0` and set `MCP_ALLOWED_HOSTS` to the hostnames used to reach the service, for example `mcp.example.com,localhost,127.0.0.1`. Allowlist entries contain no scheme, port, or path; IPv6 entries use brackets. Configure the reverse proxy and health probes to send an allowed Host header. The allowlist applies to both `/mcp` and `/health`.
 
@@ -62,6 +64,12 @@ Requests with an unapproved `Origin` header (including `Origin: null`) receive H
 
 `GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication remains planned in the [roadmap](docs/roadmap.md).
 
+## HTTP shutdown
+
+`SIGTERM` (used by Render during deployment) and `SIGINT` (Ctrl+C) initiate graceful HTTP shutdown. The server stops accepting connections and rejects any new requests reaching existing connections with HTTP 503 and `Connection: close`, including health probes. Long-lived notification streams close immediately; active tool requests can finish within the shutdown window. Idle connections are closed as responses finish, MCP servers and their transports are cleaned up once, and abandoned Oracle reads are cancelled after HTTP requests drain. Repeated shutdown signals reuse the same cleanup operation.
+
+After successful cleanup the process exits normally. If the deadline expires, remaining HTTP connections are forcibly closed and the process exits with code 1; cleanup failures also produce a nonzero exit status. `SHUTDOWN_TIMEOUT_MS` must be an integer between 1 and 2147483647. Keep it shorter than the hosting platform's termination limit. The default is 25 seconds, below [Render's default 30-second shutdown delay](https://render.com/docs/deploys#graceful-shutdown). This lifecycle applies to HTTP mode; stdio retains its existing transport behavior.
+
 ## API coverage and validation
 
 The server exposes 14 read-only tools. See [the tool reference](docs/tool-reference.md) for arguments, results, and access notes, and [the roadmap](docs/roadmap.md) for deferred work.
@@ -71,6 +79,8 @@ Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build 
 Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames and browser origins, preflight responses, browser MCP headers, and MCP HTTP connectivity on temporary ports. It covers both an explicit browser allowlist and an empty list. This check uses no Oracle API calls and is included in `npm run release:check`.
 
 Run `npm run verify:config` to build and check startup validation, safe error reporting, HTTP configuration, and stdio discovery without a default application. It is also included in `npm run release:check`. Verification uses synthetic Oracle settings and makes no Oracle API calls.
+
+Run `npm run verify:shutdown` to check idle shutdown, active MCP request draining, repeated signals, forced termination at the deadline, abandoned Oracle read cancellation, and resource cleanup. Tests use a mocked Oracle response and make no Oracle API calls. On Windows, a test-only IPC bridge emits the signal events because terminating a Windows child process does not deliver POSIX signals; on POSIX systems the tests send actual signals. Shutdown checks are included in `npm run release:check`.
 
 ## License and release checks
 

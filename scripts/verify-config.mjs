@@ -49,12 +49,13 @@ test("invalid Oracle URLs do not disclose submitted values", () => {
 
 test("HTTP configuration preserves defaults and accepts Render and IPv6 settings", () => {
   assert.deepEqual(readHttpConfig({}), {
-    host: "127.0.0.1", port: 3001, allowedHosts: ["localhost", "127.0.0.1", "[::1]"], allowedOrigins: [],
+    host: "127.0.0.1", port: 3001, allowedHosts: ["localhost", "127.0.0.1", "[::1]"], allowedOrigins: [], shutdownTimeoutMs: 25000,
   });
   assert.deepEqual(readHttpConfig({
     HOST: "0.0.0.0", PORT: "10000", MCP_ALLOWED_HOSTS: "MCP.EXAMPLE.COM, [::1],mcp.example.com",
-  }), { host: "0.0.0.0", port: 10000, allowedHosts: ["mcp.example.com", "[::1]"], allowedOrigins: [] });
+  }), { host: "0.0.0.0", port: 10000, allowedHosts: ["mcp.example.com", "[::1]"], allowedOrigins: [], shutdownTimeoutMs: 25000 });
   assert.equal(readHttpConfig({ HOST: "::1", PORT: "0" }).port, 0);
+  assert.equal(readHttpConfig({ SHUTDOWN_TIMEOUT_MS: "5000" }).shutdownTimeoutMs, 5000);
 });
 
 test("browser origins are explicit, normalized, and validated without exposing submitted values", () => {
@@ -79,6 +80,9 @@ test("browser origins are explicit, normalized, and validated without exposing s
 });
 
 test("HTTP configuration rejects malformed ports, addresses, and allowlist entries", () => {
+  for (const SHUTDOWN_TIMEOUT_MS of ["", " ", "0", "-1", "1.5", "1e3", "2147483648", "invalid"]) {
+    assert.throws(() => readHttpConfig({ SHUTDOWN_TIMEOUT_MS }), /SHUTDOWN_TIMEOUT_MS/);
+  }
   for (const PORT of ["", " ", "-1", "65536", "3001abc", "3.5", "1e3", "0x10"]) {
     assert.throws(() => readHttpConfig({ PORT }), /PORT must/);
   }
@@ -122,7 +126,7 @@ test("stdio ignores HTTP settings and supports discovery without a default appli
   const client = new Client({ name: "config-verifier", version: "1.0.0" });
   const transport = new StdioClientTransport({
     command: process.execPath, args: [path.join(root, "dist/main.js"), "--stdio"], cwd: root,
-    env: { ...fixture, EPM_APPLICATION: "", HOST: "invalid/path", PORT: "bad", MCP_ALLOWED_HOSTS: "", MCP_ALLOWED_ORIGINS: "*" },
+    env: { ...fixture, EPM_APPLICATION: "", HOST: "invalid/path", PORT: "bad", MCP_ALLOWED_HOSTS: "", MCP_ALLOWED_ORIGINS: "*", SHUTDOWN_TIMEOUT_MS: "bad" },
   });
   try {
     await client.connect(transport);
