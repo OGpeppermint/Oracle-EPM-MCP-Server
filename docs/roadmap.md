@@ -36,7 +36,7 @@ Status labels:
 - Removal of unsupported recent-job collection retrieval after Oracle returned HTTP 405.
 - Removal of job and business-rule execution from the server.
 - Build, MCP contract, absence of GUI resources, and release-compliance verification.
-- Proprietary release placeholder, third-party notices, license texts, and automated notice checks.
+- GPLv3 licensing, third-party notices, license texts, and automated notice checks.
 
 Exit state: the project operates as a single-environment, read-only MCP server with an optional GUI maintained in a separate repository. See the [endpoint roadmap](endpoint-roadmap.md).
 

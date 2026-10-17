@@ -2,7 +2,7 @@
     "name":  "oracle-epm-nspb-mcp-server",
     "version":  "0.1.0",
     "private":  true,
-    "license":  "UNLICENSED",
+    "license":  "GPL-3.0-only",
     "type":  "module",
     "description":  "Read-only MCP server for Oracle EPM Planning / NSPB.",
     "scripts":  {

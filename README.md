@@ -41,6 +41,6 @@ The server exposes 14 read-only tools. See [the tool reference](docs/tool-refere
 
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
 
-## Commercial release compliance
+## License and release checks
 
-`LICENSE.txt` contains a proprietary-license template. Replace `[LEGAL OWNER NAME]` and have the customer license terms reviewed before distribution. Generate production dependency notices with `npm run notices` and run `npm run release:check` before packaging. Install distributable runtime dependencies with `npm ci --omit=dev`. Development dependencies and GUI assets do not belong in the server distribution.
+This software is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE.txt](LICENSE.txt) for the full terms. Third-party dependencies retain their own licenses and notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `licenses/`. Generate production dependency notices with `npm run notices` and run `npm run release:check` before packaging. Install distributable runtime dependencies with `npm ci --omit=dev`. Development dependencies and GUI assets do not belong in the server distribution.
