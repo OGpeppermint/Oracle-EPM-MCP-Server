@@ -50,10 +50,12 @@ async function verifyHttp(allowedOrigins) {
       const timeout = setTimeout(() => reject(new Error("HTTP server startup timed out.")), 10000);
       const cleanup = () => clearTimeout(timeout);
       let output = "";
-      child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      child.stderr.on("data", (chunk) => {
         output += chunk;
-        const match = output.match(/listening on (http:\/\/127\.0\.0\.1:\d+)\/mcp/);
-        if (match) { cleanup(); resolve(match[1]); }
+        for (const line of output.split("\n").slice(0, -1)) {
+          const record = JSON.parse(line);
+          if (record.event === "server.listening") { cleanup(); resolve(`http://127.0.0.1:${record.port}`); }
+        }
       });
       child.once("error", (error) => { cleanup(); reject(error); });
       child.once("exit", (code) => {
@@ -86,6 +88,7 @@ async function verifyHttp(allowedOrigins) {
         assert.match(response.headers.vary, /Origin/i);
         assert.match(response.headers["access-control-expose-headers"], /Mcp-Session-Id/i);
         assert.match(response.headers["access-control-expose-headers"], /WWW-Authenticate/i);
+      assert.match(response.headers["access-control-expose-headers"], /X-Request-Id/i);
         assert.equal(response.headers["access-control-allow-credentials"], undefined);
         assert.equal(preflight.status, 204);
         assert.equal(preflight.headers["access-control-allow-origin"], origin);

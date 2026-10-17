@@ -20,9 +20,10 @@
         "verify:http": "npm run build && node scripts/verify-http.mjs",
         "verify:config": "npm run build && node --test scripts/verify-config.mjs",
         "verify:shutdown": "npm run build && node --test scripts/verify-shutdown.mjs",
+        "verify:logging": "npm run build && node --test scripts/verify-logging.mjs",
         "notices": "node scripts/generate-third-party-notices.mjs",
         "notices:check": "node scripts/generate-third-party-notices.mjs --check",
-        "release:check": "npm run build && npm run notices:check && node --test scripts/verify-config.mjs scripts/verify-shutdown.mjs && node scripts/verify-mcp.mjs && node scripts/verify-http.mjs"
+        "release:check": "npm run build && npm run notices:check && node --test scripts/verify-config.mjs scripts/verify-shutdown.mjs scripts/verify-logging.mjs && node scripts/verify-mcp.mjs && node scripts/verify-http.mjs"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.1",

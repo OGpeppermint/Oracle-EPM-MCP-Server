@@ -43,8 +43,9 @@ async function startFixture(t, shutdownTimeoutMs = 2000) {
   t.after(async () => {
     if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await exited; }
   });
-  await waitFor(child.stdout, "data", () => /listening on http:\/\/127\.0\.0\.1:\d+\/mcp/.test(output));
-  const baseUrl = output.match(/listening on (http:\/\/127\.0\.0\.1:\d+)\/mcp/)[1];
+  const records = () => diagnostics.split("\n").slice(0, -1).map((line) => JSON.parse(line));
+  await waitFor(child.stderr, "data", () => records().some(({ event }) => event === "server.listening"));
+  const baseUrl = `http://127.0.0.1:${records().find(({ event }) => event === "server.listening").port}`;
 
   async function signal(signal, options = {}) {
     const prepared = waitFor(child, "message", () => messages.some(({ type }) => type === "prepared"));
@@ -59,7 +60,7 @@ async function startFixture(t, shutdownTimeoutMs = 2000) {
   return {
     child, baseUrl, signal,
     oracleStarted: () => waitFor(child, "message", () => messages.some(({ type }) => type === "oracle-started")),
-    draining: () => waitFor(child.stderr, "data", () => diagnostics.includes("draining active connections")),
+    draining: () => waitFor(child.stderr, "data", () => records().some(({ event }) => event === "server.shutdown.started")),
     diagnostics: () => diagnostics,
     exit: async () => {
       await waitFor(child, "exit", () => child.exitCode !== null || child.signalCode !== null);
@@ -85,7 +86,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     assert.equal(await health(fixture.baseUrl), 200);
     await fixture.signal(signal);
     assert.deepEqual(await fixture.exit(), [0, null]);
-    assert.match(fixture.diagnostics(), /HTTP shutdown complete/);
+    assert.match(fixture.diagnostics(), /"event":"server.shutdown.complete"/);
     await assert.rejects(health(fixture.baseUrl));
   });
 }
@@ -108,7 +109,7 @@ test("active MCP call completes while new connections are refused and repeated s
   assert.deepEqual(completed.value.structuredContent.data, { items: [{ version: "v3" }] });
   const exit = await fixture.exit();
   assert.deepEqual(exit, [0, null], fixture.diagnostics());
-  assert.equal((fixture.diagnostics().match(/Received SIG/g) ?? []).length, 1);
+  assert.equal((fixture.diagnostics().match(/"event":"server.shutdown.started"/g) ?? []).length, 1);
 });
 
 test("an unfinished MCP request is terminated at the shutdown deadline", { timeout: 15000 }, async (t) => {
@@ -120,7 +121,7 @@ test("an unfinished MCP request is terminated at the shutdown deadline", { timeo
   await fixture.oracleStarted();
   await fixture.signal("SIGTERM");
   assert.deepEqual(await fixture.exit(), [1, null]);
-  assert.match(fixture.diagnostics(), /Shutdown deadline exceeded/);
+  assert.match(fixture.diagnostics(), /"event":"server.shutdown.timeout"/);
   await client.close();
   assert.ok(await request instanceof Error);
 });
@@ -137,7 +138,7 @@ test("an abandoned Oracle read is cancelled after HTTP requests drain", { timeou
   await fixture.signal("SIGTERM");
   const exit = await fixture.exit();
   assert.deepEqual(exit, [0, null], fixture.diagnostics());
-  assert.match(fixture.diagnostics(), /HTTP shutdown complete/);
+  assert.match(fixture.diagnostics(), /"event":"server.shutdown.complete"/);
 });
 
 test("shutdown awaits resource cleanup and closes each resource once", { timeout: 5000 }, async () => {

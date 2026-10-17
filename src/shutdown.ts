@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import type { Socket } from "node:net";
+import { log } from "./logging.js";
 
 export function manageHttpShutdown(listener: Server, timeoutMs: number) {
   const resources = new Map<() => Promise<void>, boolean>();
@@ -34,7 +35,7 @@ export function manageHttpShutdown(listener: Server, timeoutMs: number) {
     let closing: Promise<void> | undefined;
     const release = () => {
       closing ??= Promise.resolve().then(close).catch(() => {
-        console.error("Failed to close an MCP connection.");
+        log("error", "server.resource.close_failed", { errorCode: "RESOURCE_CLOSE_FAILED" });
         process.exitCode = 1;
       }).finally(() => resources.delete(release));
       return closing;
@@ -46,14 +47,14 @@ export function manageHttpShutdown(listener: Server, timeoutMs: number) {
   function shutdown(signal: string): Promise<void> {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
-    console.error(`Received ${signal}; stopping HTTP requests and draining active connections.`);
+    log("info", "server.shutdown.started", { signal });
     // Notification streams have no response boundary to drain toward.
     for (const [release, closeOnShutdown] of resources) {
       if (closeOnShutdown) void release();
     }
     const deadline = setTimeout(() => {
       forced = true;
-      console.error("Shutdown deadline exceeded; forcing remaining connections closed.");
+      log("error", "server.shutdown.timeout", { errorCode: "SHUTDOWN_TIMEOUT" });
       listener.closeAllConnections();
       for (const socket of sockets.keys()) socket.destroy();
       for (const release of resources.keys()) void release();
@@ -72,7 +73,7 @@ export function manageHttpShutdown(listener: Server, timeoutMs: number) {
       clearTimeout(deadline);
       process.off("SIGTERM", onSigterm);
       process.off("SIGINT", onSigint);
-      if (!forced) console.error("HTTP shutdown complete.");
+      if (!forced) log("info", "server.shutdown.complete");
     })();
     return shutdownPromise;
   }

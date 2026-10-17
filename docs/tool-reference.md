@@ -11,7 +11,8 @@ The server exposes 14 active tools. The active surface is read-only: it can disc
 - When an `application` argument is optional, omitting it uses `EPM_APPLICATION` from the server environment.
 - The 13 Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
 - `get-epm-connection-status` returns sanitized connection configuration and `checkedAt` directly in `structuredContent`.
-- Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with concise text; credentials are not exposed.
+- Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with safe text and a request ID. Raw Oracle error bodies, URLs, headers, parser exceptions, and stack traces are excluded.
+- Tool results include `_meta.requestId`; failures also include `_meta.errorCode`. HTTP calls share the ID returned in the `X-Request-Id` response header; stdio calls receive independent IDs. Match IDs to the JSON application logs on stderr.
 - All active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
 
 ## Tool summary
@@ -187,6 +188,8 @@ Retrieves detailed processing records for an existing Planning import or export 
 Checks local server configuration without calling Oracle. Takes no arguments and returns sanitized `connection` and ISO 8601 `checkedAt` fields. Missing variables appear in `connection.missing`. Safe to retry and read-only.
 
 `connection.configured` and `connection.missing` cover `EPM_BASE_URL`, `EPM_USERNAME`, and `EPM_PASSWORD`. An absent default `EPM_APPLICATION` does not make the connection unconfigured; application-specific calls can pass an explicit application.
+
+The username is masked consistently for email, domain-qualified, and plain service accounts: at most two initial characters are retained, followed by `****`; accounts of one or two characters return `****`.
 
 The Command Center GUI, maintained in a separate repository, calls these standard MCP tools over HTTP. The MCP server exposes no UI resources or app-only tools.
 

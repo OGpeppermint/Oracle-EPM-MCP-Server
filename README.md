@@ -24,6 +24,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 - `src/main.ts` starts the HTTP or stdio transport.
 - `src/config.ts` validates startup configuration without exposing credential values.
 - `src/shutdown.ts` handles HTTP shutdown signals, connection draining, and resource cleanup.
+- `src/logging.ts` provides JSON logging and request correlation.
 - `src/server.ts` defines the MCP tools and Oracle EPM requests.
 - `scripts/` contains MCP verification and dependency-notice tooling.
 - `docs/` contains the tool reference and server roadmaps.
@@ -70,6 +71,20 @@ Requests with an unapproved `Origin` header (including `Origin: null`) receive H
 
 After successful cleanup the process exits normally. If the deadline expires, remaining HTTP connections are forcibly closed and the process exits with code 1; cleanup failures also produce a nonzero exit status. `SHUTDOWN_TIMEOUT_MS` must be an integer between 1 and 2147483647. Keep it shorter than the hosting platform's termination limit. The default is 25 seconds, below [Render's default 30-second shutdown delay](https://render.com/docs/deploys#graceful-shutdown). This lifecycle applies to HTTP mode; stdio retains its existing transport behavior.
 
+## Logs and error references
+
+Application logs are JSON lines on stderr in both HTTP and stdio modes. Stdio stdout contains only MCP protocol messages. Events include startup and shutdown, HTTP request completion, tool completion, and safe failures. Logs contain timestamps, severity, operation names, HTTP status where available, durations, and request IDs. HTTP routes are recorded as `/mcp`, `/health`, or `other`; query strings, request bodies, arguments, headers, Oracle response bodies, raw exception messages, and stack traces are excluded.
+
+Every HTTP response includes a server-generated UUID in `X-Request-Id`, including hostname/origin rejections and JSON parser errors. Incoming request ID headers are not reused or logged. Tool results include `_meta.requestId`; tool failures also include `_meta.errorCode` and the request ID in their text. HTTP tool results share the HTTP response's ID, while stdio tool calls receive separate IDs. Browser clients can read `X-Request-Id` through CORS.
+
+For example, an Oracle authentication failure produces a log shaped like:
+
+```json
+{"timestamp":"2026-10-17T00:00:00.000Z","level":"error","event":"mcp.tool.failed","requestId":"21573b50-78b0-427f-8ade-e35b315c4192","operation":"Plan type listing","errorCode":"EPM_HTTP_ERROR","status":401,"durationMs":25}
+```
+
+Oracle failures return safe HTTP-status guidance or stable codes such as `EPM_NETWORK_ERROR`, `EPM_TIMEOUT`, `EPM_ABORTED`, and `EPM_RESPONSE_FORMAT`. Invalid JSON request bodies receive a generic HTTP 400 response. Connection status masks usernames of every format, retaining at most two initial characters and masking short names completely. Successful Oracle tool data remains intact and is not written to application logs. Use a returned request ID to find matching events in Render's service logs.
+
 ## API coverage and validation
 
 The server exposes 14 read-only tools. See [the tool reference](docs/tool-reference.md) for arguments, results, and access notes, and [the roadmap](docs/roadmap.md) for deferred work.
@@ -81,6 +96,8 @@ Run `npm run verify:http` to build and check the health endpoint, allowed and re
 Run `npm run verify:config` to build and check startup validation, safe error reporting, HTTP configuration, and stdio discovery without a default application. It is also included in `npm run release:check`. Verification uses synthetic Oracle settings and makes no Oracle API calls.
 
 Run `npm run verify:shutdown` to check idle shutdown, active MCP request draining, repeated signals, forced termination at the deadline, abandoned Oracle read cancellation, and resource cleanup. Tests use a mocked Oracle response and make no Oracle API calls. On Windows, a test-only IPC bridge emits the signal events because terminating a Windows child process does not deliver POSIX signals; on POSIX systems the tests send actual signals. Shutdown checks are included in `npm run release:check`.
+
+Run `npm run verify:logging` to check concurrent HTTP request correlation, sanitized Oracle errors, parser errors and early rejections, username masking, clean stdio communication, and successful JSON/Markdown tool results. Synthetic secrets and mocked Oracle responses verify that private values do not enter error results or application logs. These checks are included in `npm run release:check`.
 
 ## License and release checks
 

@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { getRequestId, log, withRequestContext } from "./logging.js";
 
 const activeOracleRequests = new Map<AbortController, Promise<unknown>>();
 
@@ -35,15 +36,33 @@ const readAnnotations = {
   openWorldHint: true,
 } as const;
 
-class EpmHttpError extends Error {
+class EpmOperationError extends Error {
   constructor(
+    readonly code: string,
     message: string,
-    readonly status: number,
-    readonly responseType?: string | null,
+    readonly status?: number,
   ) {
     super(message);
+  }
+}
+
+class EpmHttpError extends EpmOperationError {
+  constructor(status: number) {
+    const guidance = status === 401 ? "Check the server's Oracle credentials."
+      : status === 403 ? "Check the Oracle service account's access permissions."
+      : status === 404 ? "Check that the requested Oracle resource exists."
+      : status === 429 ? "Oracle is rate limiting requests; try again later."
+      : status >= 500 ? "Oracle is temporarily unavailable; try again later."
+      : "Check the requested operation and server configuration.";
+    super("EPM_HTTP_ERROR", `Oracle EPM returned HTTP ${status}. ${guidance}`, status);
     this.name = "EpmHttpError";
   }
+}
+
+function maskUsername(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
+  const characters = [...value.trim()];
+  return characters.length <= 2 ? "****" : `${characters.slice(0, 2).join("")}****`;
 }
 
 function connectionStatus() {
@@ -58,14 +77,14 @@ function connectionStatus() {
     configured: missing.length === 0,
     baseUrl: values.EPM_BASE_URL,
     application: values.EPM_APPLICATION,
-    username: values.EPM_USERNAME ? values.EPM_USERNAME.replace(/^(.{2}).*(@.*)$/, "$1••••$2") : undefined,
+    username: maskUsername(values.EPM_USERNAME),
     missing,
   };
 }
 
 async function epmRequest<T>(pathName: string, init?: RequestInit, accept = "application/json"): Promise<T> {
   const missing = ["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"].filter((key) => !process.env[key]);
-  if (missing.length) throw new Error(`Oracle EPM authentication is not configured. Missing: ${missing.join(", ")}`);
+  if (missing.length) throw new EpmOperationError("EPM_CONFIGURATION_MISSING", `Oracle EPM authentication is not configured. Missing: ${missing.join(", ")}`);
   const auth = Buffer.from(`${process.env.EPM_USERNAME}:${process.env.EPM_PASSWORD}`).toString("base64");
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Basic ${auth}`);
@@ -73,33 +92,37 @@ async function epmRequest<T>(pathName: string, init?: RequestInit, accept = "app
   if (init?.body === undefined) headers.delete("Content-Type");
   else if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const controller = new AbortController();
+  const signal = AbortSignal.any([AbortSignal.timeout(30_000), controller.signal]);
   const request = (async () => {
     const response = await fetch(`${process.env.EPM_BASE_URL}${pathName}`, {
       ...init,
       headers,
-      signal: AbortSignal.any([AbortSignal.timeout(30_000), controller.signal]),
+      signal,
     });
-    const body = await response.text();
     if (!response.ok) {
-      const method = init?.method?.toUpperCase() ?? "GET";
-      const responseType = response.headers.get("content-type");
-      const typeDetails = responseType ? `; response content-type ${responseType}` : "";
-      throw new EpmHttpError(
-        `Oracle EPM ${method} ${pathName} returned ${response.status}${typeDetails}: ${body.slice(0, 500) || response.statusText}`,
-        response.status,
-        responseType,
-      );
+      await response.body?.cancel().catch(() => {});
+      throw new EpmHttpError(response.status);
     }
+    const body = await response.text();
     if (!body) return {} as T;
     const responseType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (responseType.includes("json")) return JSON.parse(body) as T;
     if (responseType.includes("text/plain") || responseType.includes("text/markdown")) return body as T;
     try {
+      if (responseType && !responseType.includes("json")) throw new Error();
       return JSON.parse(body) as T;
     } catch {
-      throw new Error(`Oracle EPM returned an unsupported successful response content-type ${responseType || "unknown"} for ${pathName}.`);
+      throw new EpmOperationError("EPM_RESPONSE_FORMAT", "Oracle EPM returned an invalid or unsupported response format.");
     }
-  })();
+  })().catch((error: unknown) => {
+    if (error instanceof EpmOperationError) throw error;
+    if (signal.aborted) {
+      if (signal.reason instanceof DOMException && signal.reason.name === "TimeoutError") {
+        throw new EpmOperationError("EPM_TIMEOUT", "The Oracle EPM request timed out. Try again later.");
+      }
+      throw new EpmOperationError("EPM_ABORTED", "The Oracle EPM request was cancelled.");
+    }
+    throw new EpmOperationError("EPM_NETWORK_ERROR", "Unable to communicate with Oracle EPM. Check server connectivity and configuration.");
+  });
   activeOracleRequests.set(controller, request);
   try {
     return await request;
@@ -110,7 +133,7 @@ async function epmRequest<T>(pathName: string, init?: RequestInit, accept = "app
 
 function configuredApplication(application?: string): string {
   const value = application?.trim() || process.env.EPM_APPLICATION?.trim();
-  if (!value) throw new Error("No Oracle EPM application was provided and EPM_APPLICATION is not configured on the MCP server.");
+  if (!value) throw new EpmOperationError("EPM_APPLICATION_REQUIRED", "No Oracle EPM application was provided and EPM_APPLICATION is not configured on the MCP server.");
   return value;
 }
 
@@ -145,13 +168,28 @@ async function applicationSummary(
   }
 }
 
+async function observeTool(label: string, action: () => CallToolResult | Promise<CallToolResult>): Promise<CallToolResult> {
+  return withRequestContext(async () => {
+    const started = performance.now();
+    const requestId = getRequestId()!;
+    try {
+      const result = await action();
+      log("info", "mcp.tool.completed", { operation: label, outcome: "success", durationMs: Math.round((performance.now() - started) * 100) / 100 });
+      return { ...result, _meta: { ...result._meta, requestId } };
+    } catch (error) {
+      const code = error instanceof EpmOperationError ? error.code : "UNEXPECTED_TOOL_ERROR";
+      const message = error instanceof EpmOperationError ? error.message : "The MCP operation could not be completed.";
+      log("error", "mcp.tool.failed", {
+        operation: label, errorCode: code, status: error instanceof EpmOperationError ? error.status : undefined,
+        durationMs: Math.round((performance.now() - started) * 100) / 100,
+      });
+      return { ...textResult(`${message} Request ID: ${requestId}.`, undefined, true), _meta: { requestId, errorCode: code } };
+    }
+  });
+}
+
 async function apiResult(label: string, request: () => Promise<unknown>): Promise<CallToolResult> {
-  try {
-    const data = await request();
-    return textResult(`${label} completed successfully.`, { data });
-  } catch (error) {
-    return textResult(error instanceof Error ? error.message : String(error), undefined, true);
-  }
+  return observeTool(label, async () => textResult(`${label} completed successfully.`, { data: await request() }));
 }
 
 function textResult(text: string, structuredContent?: Record<string, unknown>, isError = false): CallToolResult {
@@ -372,13 +410,13 @@ export function createServer(): McpServer {
     inputSchema: {},
     outputSchema: connectionOutputSchema,
     annotations: readAnnotations,
-  }, async () => {
+  }, async () => observeTool("Connection status", () => {
     const data = connectionData();
     const summary = data.connection.configured
       ? `Oracle EPM${data.connection.application ? ` ${data.connection.application}` : ""} is configured.`
       : `Oracle EPM is not configured. Missing: ${data.connection.missing.join(", ")}`;
     return textResult(summary, data);
-  });
+  }));
 
   return server;
 }
