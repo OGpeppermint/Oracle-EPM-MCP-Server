@@ -4,17 +4,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import cors from "cors";
 import type { Request, Response } from "express";
+import { ConfigurationError, readHttpConfig, validateOracleConfig, type HttpConfig } from "./config.js";
 import { createServer } from "./server.js";
 
-async function startHttp(factory: () => McpServer): Promise<void> {
-  const host = process.env.HOST?.trim() || "127.0.0.1";
-  const port = Number(process.env.PORT ?? "3001");
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error("PORT must be an integer between 0 and 65535.");
-  }
-  const allowedHosts = (process.env.MCP_ALLOWED_HOSTS ?? "localhost,127.0.0.1,[::1]")
-    .split(",").map((value) => value.trim()).filter(Boolean);
-  if (!allowedHosts.length) throw new Error("MCP_ALLOWED_HOSTS must contain at least one hostname.");
+async function startHttp(factory: () => McpServer, { host, port, allowedHosts }: HttpConfig): Promise<void> {
   const app = createMcpExpressApp({ host, allowedHosts });
   app.use(cors());
   app.get("/health", (_req: Request, res: Response) => {
@@ -40,8 +33,15 @@ async function startHttp(factory: () => McpServer): Promise<void> {
   });
 }
 
-if (process.argv.includes("--stdio")) {
-  await createServer().connect(new StdioServerTransport());
-} else {
-  await startHttp(createServer);
+try {
+  process.env.EPM_BASE_URL = validateOracleConfig();
+  if (process.argv.includes("--stdio")) {
+    await createServer().connect(new StdioServerTransport());
+  } else {
+    await startHttp(createServer, readHttpConfig());
+  }
+} catch (error) {
+  if (!(error instanceof ConfigurationError)) throw error;
+  console.error(error.message);
+  process.exitCode = 1;
 }

@@ -7,6 +7,7 @@ The server exposes 14 active tools. The active surface is read-only: it can disc
 ## Common behavior
 
 - Oracle credentials come only from the MCP server environment and are never accepted as tool arguments or returned in results.
+- HTTP and stdio startup require a valid HTTPS Oracle origin and nonblank username and password. Invalid configuration exits before a transport opens; startup validation makes no Oracle request. `EPM_APPLICATION` remains optional.
 - When an `application` argument is optional, omitting it uses `EPM_APPLICATION` from the server environment.
 - The 13 Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
 - `get-epm-connection-status` returns sanitized connection configuration and `checkedAt` directly in `structuredContent`.
@@ -184,6 +185,8 @@ Retrieves detailed processing records for an existing Planning import or export 
 ### `get-epm-connection-status`
 
 Checks local server configuration without calling Oracle. Takes no arguments and returns sanitized `connection` and ISO 8601 `checkedAt` fields. Missing variables appear in `connection.missing`. Safe to retry and read-only.
+
+`connection.configured` and `connection.missing` cover `EPM_BASE_URL`, `EPM_USERNAME`, and `EPM_PASSWORD`. An absent default `EPM_APPLICATION` does not make the connection unconfigured; application-specific calls can pass an explicit application.
 
 The Command Center GUI, maintained in a separate repository, calls these standard MCP tools over HTTP. The MCP server exposes no UI resources or app-only tools.
 

@@ -22,6 +22,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 ## Repository layout
 
 - `src/main.ts` starts the HTTP or stdio transport.
+- `src/config.ts` validates startup configuration without exposing credential values.
 - `src/server.ts` defines the MCP tools and Oracle EPM requests.
 - `scripts/` contains MCP verification and dependency-notice tooling.
 - `docs/` contains the tool reference and server roadmaps.
@@ -35,12 +36,18 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `EPM_BASE_URL` | Oracle Cloud EPM origin, without a trailing slash |
 | `EPM_USERNAME` | Service-account username |
 | `EPM_PASSWORD` | Service-account password |
-| `EPM_APPLICATION` | Planning application name, such as `NSPB` |
+| `EPM_APPLICATION` | Optional default Planning application name, such as `NSPB`; tools can supply an explicit application |
 | `PORT` | Optional HTTP port; defaults to `3001` |
 | `HOST` | HTTP listening address; defaults to `127.0.0.1` |
 | `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
 
 For a container or remote deployment, set `HOST=0.0.0.0` and set `MCP_ALLOWED_HOSTS` to the hostnames used to reach the service, for example `mcp.example.com,localhost,127.0.0.1`. Allowlist entries contain no scheme, port, or path; IPv6 entries use brackets. Configure the reverse proxy and health probes to send an allowed Host header. The allowlist applies to both `/mcp` and `/health`.
+
+Both HTTP and stdio startup require a nonblank `EPM_BASE_URL`, `EPM_USERNAME`, and `EPM_PASSWORD`. The URL must be an HTTPS origin with no embedded credentials, path, query, or fragment; an optional trailing slash is normalized away. Invalid configuration exits with code 1 and an error listing setting names and expected formats, without echoing supplied values. Startup validation does not contact Oracle or verify credentials.
+
+`EPM_APPLICATION` can be omitted for application discovery. Application-specific tools then require an explicit `application` argument. Connection status considers the three required Oracle settings, independently of whether a default application is set.
+
+In HTTP mode, `HOST` must be a hostname or unbracketed IP address, `PORT` must be an integer from 0 to 65535 (0 selects a temporary port), and `MCP_ALLOWED_HOSTS` must contain valid hostnames or IP addresses with no empty entries or wildcards. Omit HTTP settings to use their defaults. Stdio mode ignores HTTP-only settings.
 
 `GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication and restricted browser CORS remain planned in the [roadmap](docs/roadmap.md).
 
@@ -51,6 +58,8 @@ The server exposes 14 read-only tools. See [the tool reference](docs/tool-refere
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
 
 Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames, and MCP HTTP connectivity on a temporary port. This check uses no Oracle API calls and is included in `npm run release:check`.
+
+Run `npm run verify:config` to build and check startup validation, safe error reporting, HTTP configuration, and stdio discovery without a default application. It is also included in `npm run release:check`. Verification uses synthetic Oracle settings and makes no Oracle API calls.
 
 ## License and release checks
 

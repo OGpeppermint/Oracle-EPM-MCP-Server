@@ -16,6 +16,12 @@ const transport = new StdioClientTransport({
   command: process.execPath,
   args: ["--env-file-if-exists=.env", path.join(root, "dist/main.js"), "--stdio"],
   cwd: root,
+  env: {
+    EPM_BASE_URL: "https://example.oraclecloud.com",
+    EPM_USERNAME: "verification@example.com",
+    EPM_PASSWORD: "verification-only-password",
+    EPM_APPLICATION: "Verification",
+  },
 });
 try {
   await client.connect(transport);

@@ -16,6 +16,10 @@ const licenseFamilySources = new Map([
   ["ISC.txt", "node_modules/inherits/LICENSE"],
 ]);
 
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
 function findLegalFiles(packageDirectory) {
   return fs.readdirSync(packageDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /^(licen[cs]e|notice)(?:\..*)?$/i.test(entry.name))
@@ -37,7 +41,7 @@ const dependencies = Object.entries(lock.packages ?? {})
       repository: typeof packageMetadata.repository === "string" ? packageMetadata.repository : packageMetadata.repository?.url,
       legalFiles: legalFiles.map((fileName) => ({
         fileName,
-        text: fs.readFileSync(path.join(packageDirectory, fileName), "utf8").trim(),
+        text: normalizeLineEndings(fs.readFileSync(path.join(packageDirectory, fileName), "utf8")).trim(),
       })),
     };
   })
@@ -75,13 +79,13 @@ for (const dependency of dependencies) {
 
 const generated = `${lines.join("\n").trim()}\n`;
 const generatedLicenseFamilies = new Map(
-  [...licenseFamilySources].map(([fileName, source]) => [fileName, fs.readFileSync(path.join(root, ...source.split("/")), "utf8")]),
+  [...licenseFamilySources].map(([fileName, source]) => [fileName, normalizeLineEndings(fs.readFileSync(path.join(root, ...source.split("/")), "utf8"))]),
 );
 if (checkOnly) {
-  const current = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
+  const current = fs.existsSync(outputPath) ? normalizeLineEndings(fs.readFileSync(outputPath, "utf8")) : "";
   const staleLicenseFiles = [...generatedLicenseFamilies].filter(([fileName, expected]) => {
     const target = path.join(licenseDirectory, fileName);
-    return !fs.existsSync(target) || fs.readFileSync(target, "utf8") !== expected;
+    return !fs.existsSync(target) || normalizeLineEndings(fs.readFileSync(target, "utf8")) !== expected;
   }).map(([fileName]) => fileName);
   if (current !== generated || staleLicenseFiles.length > 0) {
     console.error(`Release notices are missing or stale${staleLicenseFiles.length ? `: ${staleLicenseFiles.join(", ")}` : ""}. Run npm run notices.`);

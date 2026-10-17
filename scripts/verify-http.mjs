@@ -9,7 +9,16 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const root = path.resolve(import.meta.dirname, "..");
 const child = spawn(process.execPath, [path.join(root, "dist/main.js")], {
   cwd: root,
-  env: { ...process.env, HOST: "127.0.0.1", PORT: "0", MCP_ALLOWED_HOSTS: "127.0.0.1, mcp.test" },
+  env: {
+    ...process.env,
+    EPM_BASE_URL: "https://example.oraclecloud.com",
+    EPM_USERNAME: "verification@example.com",
+    EPM_PASSWORD: "verification-only-password",
+    EPM_APPLICATION: "Verification",
+    HOST: "127.0.0.1",
+    PORT: "0",
+    MCP_ALLOWED_HOSTS: "127.0.0.1, mcp.test",
+  },
   stdio: ["ignore", "pipe", "pipe"],
 });
 const client = new Client({ name: "oracle-epm-http-verifier", version: "1.0.0" });

@@ -41,10 +41,12 @@ Status labels:
 
 Exit state: the project operates as a single-environment, read-only MCP server with an optional GUI maintained in a separate repository. See the [endpoint roadmap](endpoint-roadmap.md).
 
+Verification baseline completed on 2026-10-17 using Node.js 24.22.0 and npm 11.19.1: a clean `npm ci --include=dev` installation and `npm run release:check` passed. This covers TypeScript compilation, notices for 93 production packages and five license families, discovery of all 14 read-only tools over stdio, and HTTP health, hostname validation, and MCP connectivity. Notice checks also passed with Windows CRLF line endings. These checks do not call Oracle or validate live Oracle credentials.
+
 ### Milestone 2: production configuration and operational hardening — Next
 
 - Extend the documented configuration strategy for production deployment: npm startup commands load an optional local `.env`, and deployed environment variables take precedence.
-- Validate all required settings at startup with safe, actionable errors.
+- **Complete:** validate the required Oracle URL and credentials at startup with safe, actionable errors; validate HTTP listening and hostname settings in HTTP mode. Keep the default application optional and cover these rules with `npm run verify:config`.
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
 - Replace unrestricted `cors()` with an explicit browser-origin allowlist for the Command Center and approved browser clients; test allowed origins, rejected origins, and preflight requests.
 - Document reverse-proxy, HTTPS, health-probe Host headers, and shutdown behavior. The existing `/health` route reports liveness without checking Oracle connectivity.

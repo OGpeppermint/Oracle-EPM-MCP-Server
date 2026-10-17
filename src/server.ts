@@ -44,9 +44,9 @@ function connectionStatus() {
     EPM_BASE_URL: process.env.EPM_BASE_URL?.replace(/\/$/, ""),
     EPM_USERNAME: process.env.EPM_USERNAME,
     EPM_PASSWORD: process.env.EPM_PASSWORD,
-    EPM_APPLICATION: process.env.EPM_APPLICATION,
+    EPM_APPLICATION: process.env.EPM_APPLICATION?.trim() || undefined,
   };
-  const missing = Object.entries(values).filter(([, value]) => !value).map(([key]) => key);
+  const missing = (["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"] as const).filter((key) => !values[key]);
   return {
     configured: missing.length === 0,
     baseUrl: values.EPM_BASE_URL,
@@ -359,7 +359,7 @@ export function createServer(): McpServer {
   }, async () => {
     const data = connectionData();
     const summary = data.connection.configured
-      ? `Oracle EPM ${data.connection.application} is configured.`
+      ? `Oracle EPM${data.connection.application ? ` ${data.connection.application}` : ""} is configured.`
       : `Oracle EPM is not configured. Missing: ${data.connection.missing.join(", ")}`;
     return textResult(summary, data);
   });
