@@ -25,7 +25,8 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 - `src/config.ts` validates startup configuration without exposing credential values.
 - `src/shutdown.ts` handles HTTP shutdown signals, connection draining, and resource cleanup.
 - `src/logging.ts` provides JSON logging and request correlation.
-- `src/server.ts` defines the MCP tools and Oracle EPM requests.
+- `src/server.ts` defines the MCP tools.
+- `src/oracle-client.ts` handles Oracle requests, deadlines, retries, response limits, and cancellation.
 - `scripts/` contains MCP verification and dependency-notice tooling.
 - `docs/` contains the tool reference and server roadmaps.
 - `licenses/` and `THIRD_PARTY_NOTICES.md` contain server dependency license material.
@@ -39,6 +40,9 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `EPM_USERNAME` | Service-account username |
 | `EPM_PASSWORD` | Service-account password |
 | `EPM_APPLICATION` | Optional default Planning application name, such as `NSPB`; tools can supply an explicit application |
+| `EPM_REQUEST_TIMEOUT_MS` | Total Oracle operation deadline, including retries; defaults to `30000` milliseconds |
+| `EPM_MAX_RETRIES` | Additional attempts for eligible GET failures; defaults to `2`, or `0` to disable |
+| `EPM_MAX_RESPONSE_BYTES` | Maximum decoded Oracle response body size; defaults to `5242880` bytes (5 MiB) |
 | `PORT` | Optional HTTP port; defaults to `3001` |
 | `HOST` | HTTP listening address; defaults to `127.0.0.1` |
 | `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
@@ -65,6 +69,16 @@ Requests with an unapproved `Origin` header (including `Origin: null`) receive H
 
 `GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication remains planned in the [roadmap](docs/roadmap.md).
 
+## Oracle request limits and retries
+
+Every Oracle operation has one `EPM_REQUEST_TIMEOUT_MS` deadline covering response headers, body downloads, retry delays, and the application-summary HTTP 406 compatibility fallback. The default is 30 seconds, shared by all attempts. HTTP and stdio startup validate these settings; invalid values fail before either transport opens. The timeout accepts integers from 1 to 2147483647 milliseconds, retries from 0 to 10, and the response limit from 1 to 104857600 bytes (100 MiB).
+
+GET requests retry HTTP 429, 502, 503, and 504, plus transient network failures such as connection resets and temporary DNS failures. The default allows two retries (three attempts total). Delays use exponential backoff with jitter: approximately 250–500 ms before the first retry, 500–1000 ms before the second, and a five-second backoff ceiling for larger configured retry counts. A valid `Retry-After` delay, expressed as seconds or an HTTP date, is respected when longer than the backoff. If the wait cannot fit within the remaining deadline, the operation returns its last error without another attempt. Authentication, permission, other HTTP failures, certificate failures, malformed responses, and oversized responses are not retried. The data-slice POST is not retried.
+
+The application-summary fallback to `Accept: */*` remains limited to one additional request on HTTP 406, even when transient retries are disabled. It shares the same deadline and transient retry budget; it does not reset either. Retry waits and response reads can be cancelled during shutdown cleanup.
+
+Oracle response bodies are capped at 5 MiB by default. The client counts decoded bytes while streaming, including responses without `Content-Length` and decompressed bodies. An excessive uncompressed `Content-Length` can be rejected before reading. Exceeding the limit cancels the download and returns `EPM_RESPONSE_TOO_LARGE`, with guidance to paginate, select fewer fields, or narrow the grid. Results are never silently truncated. The limit covers the Oracle body, rather than total process memory or the serialized MCP result; choose limits appropriate for your workload and available memory. Responses within the limit retain the existing JSON and summary text behavior.
+
 ## HTTP shutdown
 
 `SIGTERM` (used by Render during deployment) and `SIGINT` (Ctrl+C) initiate graceful HTTP shutdown. The server stops accepting connections and rejects any new requests reaching existing connections with HTTP 503 and `Connection: close`, including health probes. Long-lived notification streams close immediately; active tool requests can finish within the shutdown window. Idle connections are closed as responses finish, MCP servers and their transports are cleaned up once, and abandoned Oracle reads are cancelled after HTTP requests drain. Repeated shutdown signals reuse the same cleanup operation.
@@ -83,7 +97,7 @@ For example, an Oracle authentication failure produces a log shaped like:
 {"timestamp":"2026-10-17T00:00:00.000Z","level":"error","event":"mcp.tool.failed","requestId":"21573b50-78b0-427f-8ade-e35b315c4192","operation":"Plan type listing","errorCode":"EPM_HTTP_ERROR","status":401,"durationMs":25}
 ```
 
-Oracle failures return safe HTTP-status guidance or stable codes such as `EPM_NETWORK_ERROR`, `EPM_TIMEOUT`, `EPM_ABORTED`, and `EPM_RESPONSE_FORMAT`. Invalid JSON request bodies receive a generic HTTP 400 response. Connection status masks usernames of every format, retaining at most two initial characters and masking short names completely. Successful Oracle tool data remains intact and is not written to application logs. Use a returned request ID to find matching events in Render's service logs.
+Oracle failures return safe HTTP-status guidance or stable codes such as `EPM_NETWORK_ERROR`, `EPM_TIMEOUT`, `EPM_ABORTED`, `EPM_RESPONSE_FORMAT`, and `EPM_RESPONSE_TOO_LARGE`. Retry events (`oracle.request.retry`) carry the existing request ID, next attempt number, delay, and safe status/error code; Oracle URLs, headers, and response contents remain excluded. Invalid JSON request bodies receive a generic HTTP 400 response. Connection status masks usernames of every format, retaining at most two initial characters and masking short names completely. Successful Oracle tool data remains intact and is not written to application logs. Use a returned request ID to find matching events in Render's service logs.
 
 ## API coverage and validation
 
@@ -98,6 +112,8 @@ Run `npm run verify:config` to build and check startup validation, safe error re
 Run `npm run verify:shutdown` to check idle shutdown, active MCP request draining, repeated signals, forced termination at the deadline, abandoned Oracle read cancellation, and resource cleanup. Tests use a mocked Oracle response and make no Oracle API calls. On Windows, a test-only IPC bridge emits the signal events because terminating a Windows child process does not deliver POSIX signals; on POSIX systems the tests send actual signals. Shutdown checks are included in `npm run release:check`.
 
 Run `npm run verify:logging` to check concurrent HTTP request correlation, sanitized Oracle errors, parser errors and early rejections, username masking, clean stdio communication, and successful JSON/Markdown tool results. Synthetic secrets and mocked Oracle responses verify that private values do not enter error results or application logs. These checks are included in `npm run release:check`.
+
+Run `npm run verify:oracle` to check retry eligibility and budgets, exponential backoff and jitter, `Retry-After`, shared deadlines and summary fallback, byte limits, stalled downloads, and cancellation during retry waits. Oracle requests are mocked; the checks make no live Oracle calls and are included in `npm run release:check`.
 
 ## License and release checks
 

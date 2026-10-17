@@ -14,6 +14,7 @@ const fixtureEnv = {
   EPM_PASSWORD: "fixture-private-password", EPM_APPLICATION: "fixture-private-application",
   HOST: "127.0.0.1", PORT: "0", MCP_ALLOWED_HOSTS: "127.0.0.1", MCP_ALLOWED_ORIGINS: "https://gui.example.com",
   SHUTDOWN_TIMEOUT_MS: "1000",
+  EPM_MAX_RETRIES: "0", EPM_MAX_RESPONSE_BYTES: "1024",
 };
 const secrets = [
   fixtureEnv.EPM_USERNAME, fixtureEnv.EPM_PASSWORD, fixtureEnv.EPM_APPLICATION,
@@ -90,6 +91,7 @@ test("concurrent HTTP tool errors correlate with access logs without exposing pr
     ["http-401", "EPM_HTTP_ERROR"], ["http-403", "EPM_HTTP_ERROR"], ["http-404", "EPM_HTTP_ERROR"],
     ["http-429", "EPM_HTTP_ERROR"], ["http-500", "EPM_HTTP_ERROR"], ["network-error", "EPM_NETWORK_ERROR"],
     ["invalid-json", "EPM_RESPONSE_FORMAT"], ["invalid-format", "EPM_RESPONSE_FORMAT"], ["timeout", "EPM_TIMEOUT"],
+    ["oversized", "EPM_RESPONSE_TOO_LARGE"],
   ];
   const responses = await Promise.all(scenarios.map(async ([scenario, errorCode], id) => {
     const response = await request(fixture.baseUrl, `/mcp?token=${fixtureEnv.EPM_PASSWORD}`, {

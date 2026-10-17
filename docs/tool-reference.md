@@ -1,6 +1,6 @@
 # Oracle EPM NSPB MCP tool reference
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-10-17
 
 The server exposes 14 active tools. The active surface is read-only: it can discover and inspect Planning resources, export a targeted data slice, and inspect existing jobs, but it cannot submit, rerun, cancel, or otherwise execute jobs or business rules.
 
@@ -14,6 +14,8 @@ The server exposes 14 active tools. The active surface is read-only: it can disc
 - Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with safe text and a request ID. Raw Oracle error bodies, URLs, headers, parser exceptions, and stack traces are excluded.
 - Tool results include `_meta.requestId`; failures also include `_meta.errorCode`. HTTP calls share the ID returned in the `X-Request-Id` response header; stdio calls receive independent IDs. Match IDs to the JSON application logs on stderr.
 - All active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
+- Oracle operations share a configurable 30-second total deadline across attempts and retry waits. Eligible GET requests retry transient network failures and HTTP 429/502/503/504 up to twice, with exponential backoff, jitter, and respect for `Retry-After`. POST exports, authentication/permission errors, invalid responses, and size-limit failures are not retried.
+- Oracle response bodies are limited to 5 MiB by default, counted as decoded bytes while downloading. An oversized response is cancelled and returned as `EPM_RESPONSE_TOO_LARGE`, without partial data. Use pagination, field selection, or a narrower data slice. See the [configuration reference](../README.md#oracle-request-limits-and-retries) for settings and bounds.
 
 ## Tool summary
 
@@ -64,7 +66,7 @@ Retrieves Oracle's AI-focused summary of a Planning application. It provides bro
 - Returns: Oracle's application-summary payload.
 - Side effects: none.
 - Stability note: Oracle describes this AI-oriented response as subject to change between releases, so consumers should not treat it as a fixed integration contract.
-- Compatibility behavior: the server omits `aliasTableName=Default` because Default is Oracle's documented default. It first requests `application/json`; if this endpoint alone returns HTTP 406, it retries the same idempotent GET once with `Accept: */*` to accommodate tenant rollout differences. Successful JSON and Markdown/plain-text representations are supported; HTML success responses are rejected.
+- Compatibility behavior: the server omits `aliasTableName=Default` because Default is Oracle's documented default. It first requests `application/json`; if this endpoint alone returns HTTP 406, it retries the same idempotent GET once with `Accept: */*` to accommodate tenant rollout differences. The fallback shares the operation deadline and transient retry budget, remains available with `EPM_MAX_RETRIES=0`, and does not loop on another 406. Successful JSON and Markdown/plain-text representations are supported; HTML success responses are rejected.
 
 ## Plan types and metadata
 

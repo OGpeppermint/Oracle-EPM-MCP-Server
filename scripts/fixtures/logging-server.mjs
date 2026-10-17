@@ -17,6 +17,7 @@ globalThis.fetch = async (url, options) => {
     });
   }
   if (scenario === "network-error") throw new Error(privateText);
+  if (scenario === "oversized") return new Response(privateText.repeat(100), { headers: { "Content-Type": "text/plain" } });
   if (scenario === "timeout") {
     return new Promise((_resolve, reject) => {
       options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });

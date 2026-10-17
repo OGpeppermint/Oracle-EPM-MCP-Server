@@ -2,14 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { getRequestId, log, withRequestContext } from "./logging.js";
-
-const activeOracleRequests = new Map<AbortController, Promise<unknown>>();
-
-export async function closeOracleRequests(): Promise<void> {
-  const pending = [...activeOracleRequests];
-  for (const [controller] of pending) controller.abort();
-  await Promise.allSettled(pending.map(([, request]) => request));
-}
+import { epmRequest, EpmOperationError } from "./oracle-client.js";
 
 const connectionSchema = z.object({
   configured: z.boolean().describe("True only when all required Oracle EPM environment variables are present on the MCP server."),
@@ -36,29 +29,6 @@ const readAnnotations = {
   openWorldHint: true,
 } as const;
 
-class EpmOperationError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly status?: number,
-  ) {
-    super(message);
-  }
-}
-
-class EpmHttpError extends EpmOperationError {
-  constructor(status: number) {
-    const guidance = status === 401 ? "Check the server's Oracle credentials."
-      : status === 403 ? "Check the Oracle service account's access permissions."
-      : status === 404 ? "Check that the requested Oracle resource exists."
-      : status === 429 ? "Oracle is rate limiting requests; try again later."
-      : status >= 500 ? "Oracle is temporarily unavailable; try again later."
-      : "Check the requested operation and server configuration.";
-    super("EPM_HTTP_ERROR", `Oracle EPM returned HTTP ${status}. ${guidance}`, status);
-    this.name = "EpmHttpError";
-  }
-}
-
 function maskUsername(value: string | undefined): string | undefined {
   if (!value?.trim()) return undefined;
   const characters = [...value.trim()];
@@ -80,55 +50,6 @@ function connectionStatus() {
     username: maskUsername(values.EPM_USERNAME),
     missing,
   };
-}
-
-async function epmRequest<T>(pathName: string, init?: RequestInit, accept = "application/json"): Promise<T> {
-  const missing = ["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"].filter((key) => !process.env[key]);
-  if (missing.length) throw new EpmOperationError("EPM_CONFIGURATION_MISSING", `Oracle EPM authentication is not configured. Missing: ${missing.join(", ")}`);
-  const auth = Buffer.from(`${process.env.EPM_USERNAME}:${process.env.EPM_PASSWORD}`).toString("base64");
-  const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Basic ${auth}`);
-  headers.set("Accept", accept);
-  if (init?.body === undefined) headers.delete("Content-Type");
-  else if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const controller = new AbortController();
-  const signal = AbortSignal.any([AbortSignal.timeout(30_000), controller.signal]);
-  const request = (async () => {
-    const response = await fetch(`${process.env.EPM_BASE_URL}${pathName}`, {
-      ...init,
-      headers,
-      signal,
-    });
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => {});
-      throw new EpmHttpError(response.status);
-    }
-    const body = await response.text();
-    if (!body) return {} as T;
-    const responseType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (responseType.includes("text/plain") || responseType.includes("text/markdown")) return body as T;
-    try {
-      if (responseType && !responseType.includes("json")) throw new Error();
-      return JSON.parse(body) as T;
-    } catch {
-      throw new EpmOperationError("EPM_RESPONSE_FORMAT", "Oracle EPM returned an invalid or unsupported response format.");
-    }
-  })().catch((error: unknown) => {
-    if (error instanceof EpmOperationError) throw error;
-    if (signal.aborted) {
-      if (signal.reason instanceof DOMException && signal.reason.name === "TimeoutError") {
-        throw new EpmOperationError("EPM_TIMEOUT", "The Oracle EPM request timed out. Try again later.");
-      }
-      throw new EpmOperationError("EPM_ABORTED", "The Oracle EPM request was cancelled.");
-    }
-    throw new EpmOperationError("EPM_NETWORK_ERROR", "Unable to communicate with Oracle EPM. Check server connectivity and configuration.");
-  });
-  activeOracleRequests.set(controller, request);
-  try {
-    return await request;
-  } finally {
-    activeOracleRequests.delete(controller);
-  }
 }
 
 function configuredApplication(application?: string): string {
@@ -160,12 +81,7 @@ async function applicationSummary(
     aliasTableName: effectiveAlias,
     dimensionsToInclude,
   });
-  try {
-    return await epmRequest(pathName, { method: "GET" });
-  } catch (error) {
-    if (!(error instanceof EpmHttpError) || error.status !== 406) throw error;
-    return epmRequest(pathName, { method: "GET" }, "*/*");
-  }
+  return epmRequest(pathName, { method: "GET" }, { summaryFallback: true });
 }
 
 async function observeTool(label: string, action: () => CallToolResult | Promise<CallToolResult>): Promise<CallToolResult> {

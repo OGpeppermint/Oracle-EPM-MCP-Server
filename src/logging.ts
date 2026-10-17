@@ -16,10 +16,12 @@ type LogFields = {
   port?: number;
   transport?: string;
   message?: string;
+  attempt?: number;
+  delayMs?: number;
 };
 const fieldNames = new Set([
   "requestId", "operation", "method", "route", "status", "durationMs", "outcome",
-  "errorCode", "signal", "port", "transport", "message",
+  "errorCode", "signal", "port", "transport", "message", "attempt", "delayMs",
 ]);
 
 // Callers supply safe scalar metadata, never raw exceptions, bodies, arguments, or headers.

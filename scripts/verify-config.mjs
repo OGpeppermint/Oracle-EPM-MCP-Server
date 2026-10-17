@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
-import { ConfigurationError, readHttpConfig, validateOracleConfig } from "../dist/config.js";
+import { ConfigurationError, readHttpConfig, readOracleRequestConfig, validateOracleConfig } from "../dist/config.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -12,6 +12,26 @@ const fixture = {
   EPM_USERNAME: "verification@example.com",
   EPM_PASSWORD: "verification-only-password",
 };
+
+test("Oracle request limits have bounded defaults and safe validation", () => {
+  assert.deepEqual(readOracleRequestConfig({}), { timeoutMs: 30000, maxRetries: 2, maxResponseBytes: 5242880 });
+  assert.deepEqual(readOracleRequestConfig({ EPM_REQUEST_TIMEOUT_MS: "1000", EPM_MAX_RETRIES: "0", EPM_MAX_RESPONSE_BYTES: "4096" }),
+    { timeoutMs: 1000, maxRetries: 0, maxResponseBytes: 4096 });
+  for (const [key, invalid] of [
+    ["EPM_REQUEST_TIMEOUT_MS", ["0", "2147483648"]],
+    ["EPM_MAX_RETRIES", ["-1", "11"]],
+    ["EPM_MAX_RESPONSE_BYTES", ["0", "104857601"]],
+  ]) {
+    for (const value of [...invalid, "", " ", "1.5", "1e3", "private-marker"]) {
+      assert.throws(() => readOracleRequestConfig({ [key]: value }), (error) => {
+        assert.ok(error instanceof ConfigurationError);
+        assert.ok(error.message.includes(key));
+        assert.ok(!error.message.includes("private-marker"));
+        return true;
+      });
+    }
+  }
+});
 
 test("Oracle configuration accepts an HTTPS origin and an optional default application", () => {
   assert.equal(validateOracleConfig(fixture), "https://example.oraclecloud.com");
@@ -120,6 +140,17 @@ test("startup exits with a sanitized error before opening HTTP or stdio transpor
   assert.match(result.stderr, /HOST must/);
   assert.match(result.stderr, /PORT must/);
   assert.ok(!result.stderr.includes("private-marker"));
+  for (const args of [[], ["--stdio"]]) {
+    const invalid = spawnSync(process.execPath, [path.join(root, "dist/main.js"), ...args], {
+      cwd: root, env: { ...process.env, ...fixture, EPM_MAX_RETRIES: "private-marker" },
+      encoding: "utf8", timeout: 10000,
+    });
+    assert.ifError(invalid.error);
+    assert.equal(invalid.status, 1);
+    assert.equal(invalid.stdout, "");
+    assert.match(invalid.stderr, /EPM_MAX_RETRIES/);
+    assert.ok(!invalid.stderr.includes("private-marker"));
+  }
 });
 
 test("stdio ignores HTTP settings and supports discovery without a default application", async () => {

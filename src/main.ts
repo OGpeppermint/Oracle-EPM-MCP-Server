@@ -5,8 +5,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import cors from "cors";
 import type { ErrorRequestHandler, Request, Response } from "express";
 import { createServer as createHttpServer } from "node:http";
-import { ConfigurationError, readHttpConfig, validateOracleConfig, type HttpConfig } from "./config.js";
-import { closeOracleRequests, createServer } from "./server.js";
+import { ConfigurationError, readHttpConfig, readOracleRequestConfig, validateOracleConfig, type HttpConfig } from "./config.js";
+import { createServer } from "./server.js";
+import { closeOracleRequests } from "./oracle-client.js";
 import { manageHttpShutdown } from "./shutdown.js";
 import { handleHttpRequest, log } from "./logging.js";
 
@@ -80,6 +81,7 @@ async function startHttp(factory: () => McpServer, { host, port, allowedHosts, a
 
 try {
   process.env.EPM_BASE_URL = validateOracleConfig();
+  readOracleRequestConfig();
   if (process.argv.includes("--stdio")) {
     await createServer().connect(new StdioServerTransport());
   } else {

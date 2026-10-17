@@ -15,6 +15,31 @@ export type HttpConfig = {
   shutdownTimeoutMs: number;
 };
 
+export type OracleRequestConfig = {
+  timeoutMs: number;
+  maxRetries: number;
+  maxResponseBytes: number;
+};
+
+export function readOracleRequestConfig(env: NodeJS.ProcessEnv = process.env): OracleRequestConfig {
+  const issues: string[] = [];
+  const integer = (key: string, fallback: number, minimum: number, maximum: number): number => {
+    const raw = env[key] === undefined ? String(fallback) : env[key]!.trim();
+    const value = Number(raw);
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+      issues.push(`${key} must be an integer between ${minimum} and ${maximum}.`);
+    }
+    return value;
+  };
+  const config = {
+    timeoutMs: integer("EPM_REQUEST_TIMEOUT_MS", 30000, 1, 2147483647),
+    maxRetries: integer("EPM_MAX_RETRIES", 2, 0, 10),
+    maxResponseBytes: integer("EPM_MAX_RESPONSE_BYTES", 5 * 1024 * 1024, 1, 100 * 1024 * 1024),
+  };
+  if (issues.length) throw new ConfigurationError(issues);
+  return config;
+}
+
 function isHostname(value: string): boolean {
   return value.length <= 253 && !/^[\d.]+$/.test(value)
     && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/i.test(value);
