@@ -7,9 +7,22 @@ import type { Request, Response } from "express";
 import { ConfigurationError, readHttpConfig, validateOracleConfig, type HttpConfig } from "./config.js";
 import { createServer } from "./server.js";
 
-async function startHttp(factory: () => McpServer, { host, port, allowedHosts }: HttpConfig): Promise<void> {
+async function startHttp(factory: () => McpServer, { host, port, allowedHosts, allowedOrigins }: HttpConfig): Promise<void> {
   const app = createMcpExpressApp({ host, allowedHosts });
-  app.use(cors());
+  app.use((req, res, next) => {
+    res.vary("Origin");
+    if (req.headers.origin !== undefined && !allowedOrigins.includes(req.headers.origin)) {
+      res.status(403).json({ error: "Request origin is not allowed." });
+      return;
+    }
+    next();
+  });
+  app.use(cors({
+    origin: allowedOrigins,
+    methods: ["GET", "HEAD", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Accept", "Content-Type", "Authorization", "MCP-Protocol-Version", "Mcp-Session-Id", "Last-Event-ID"],
+    exposedHeaders: ["Mcp-Session-Id", "WWW-Authenticate"],
+  }));
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });

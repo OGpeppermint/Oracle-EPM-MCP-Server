@@ -25,7 +25,7 @@ An inbound MCP token must never be forwarded to Oracle. These tokens have differ
 - Use compatible MCP SDK resource-server helpers and evaluate the SDK upgrade path before production authentication becomes a release gate.
 - Add `jose` as a direct production dependency if used for JWT validation.
 - Keep metadata and health endpoints intentionally public; protect `/mcp` and all data-bearing endpoints.
-- Restrict CORS to approved MCP hosts and deployment origins.
+- **Implemented:** configure approved browser origins with `MCP_ALLOWED_ORIGINS`; incoming-request authentication remains separate from the browser-origin allowlist.
 - Log safe authentication outcomes and subject identifiers, never tokens, secrets, or passwords.
 - Test each target MCP host with pre-registered or dynamic client registration; do not assume compatibility.
 - Keep local `stdio` transport environment-authenticated and free of browser OAuth behavior.

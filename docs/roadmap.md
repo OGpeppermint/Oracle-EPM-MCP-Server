@@ -43,12 +43,14 @@ Exit state: the project operates as a single-environment, read-only MCP server w
 
 Verification baseline completed on 2026-10-17 using Node.js 24.22.0 and npm 11.19.1: a clean `npm ci --include=dev` installation and `npm run release:check` passed. This covers TypeScript compilation, notices for 93 production packages and five license families, discovery of all 14 read-only tools over stdio, and HTTP health, hostname validation, and MCP connectivity. Notice checks also passed with Windows CRLF line endings. These checks do not call Oracle or validate live Oracle credentials.
 
+Dependency audit baseline refreshed on 2026-10-17: upgraded the MCP SDK, fast-uri, hono, ip-address, proxy-addr, and qs to patched releases. `npm audit --package-lock-only` reported zero known vulnerabilities across the lockfile, and the release checks passed after regenerating dependency notices. The SDK minimum is now `^1.32.1`. Automated recurring dependency scanning remains planned below; the npm audit does not assess Node.js runtime vulnerabilities.
+
 ### Milestone 2: production configuration and operational hardening — Next
 
 - Extend the documented configuration strategy for production deployment: npm startup commands load an optional local `.env`, and deployed environment variables take precedence.
 - **Complete:** validate the required Oracle URL and credentials at startup with safe, actionable errors; validate HTTP listening and hostname settings in HTTP mode. Keep the default application optional and cover these rules with `npm run verify:config`.
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
-- Replace unrestricted `cors()` with an explicit browser-origin allowlist for the Command Center and approved browser clients; test allowed origins, rejected origins, and preflight requests.
+- **Complete:** replace unrestricted `cors()` with the `MCP_ALLOWED_ORIGINS` browser-origin allowlist. Validate origin settings at startup; reject unapproved origins, support MCP preflight and browser response headers, and retain clients without an Origin header. `npm run verify:http` covers configured and empty allowlists, origin rejection, preflight, and browser MCP connectivity.
 - Document reverse-proxy, HTTPS, health-probe Host headers, and shutdown behavior. The existing `/health` route reports liveness without checking Oracle connectivity.
 - Add automated HTTP transport tests for content negotiation, session behavior, and MCP error responses.
 - Establish supported Node.js and MCP SDK versions and an upgrade policy.

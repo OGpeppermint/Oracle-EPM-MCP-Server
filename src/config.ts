@@ -11,6 +11,7 @@ export type HttpConfig = {
   host: string;
   port: number;
   allowedHosts: string[];
+  allowedOrigins: string[];
 };
 
 function isHostname(value: string): boolean {
@@ -65,6 +66,23 @@ export function readHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig
   if (allowedHosts.some((value) => !isAllowedHostname(value))) {
     issues.push("MCP_ALLOWED_HOSTS must be a nonempty comma-separated list of hostnames or IP addresses without schemes, ports, paths, wildcards, or empty entries. Put IPv6 addresses in brackets.");
   }
+  const allowedOrigins: string[] = [];
+  const rawOrigins = env.MCP_ALLOWED_ORIGINS?.trim();
+  if (rawOrigins) {
+    for (const entry of rawOrigins.split(",")) {
+      const value = entry.trim();
+      try {
+        const url = new URL(value);
+        if (!/^https?:\/\/[^/?#\\]+\/?$/i.test(value) || /[\s\\@?#*]/.test(value)
+          || !["http:", "https:"].includes(url.protocol) || !isAllowedHostname(url.hostname)
+          || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw new Error();
+        allowedOrigins.push(url.origin);
+      } catch {
+        issues.push("MCP_ALLOWED_ORIGINS must contain comma-separated HTTP or HTTPS origins (scheme, hostname, and optional port), without credentials, paths, queries, fragments, wildcards, or empty entries. Leave it empty to allow no browser origins.");
+        break;
+      }
+    }
+  }
   if (issues.length) throw new ConfigurationError(issues);
-  return { host, port, allowedHosts: [...new Set(allowedHosts)] };
+  return { host, port, allowedHosts: [...new Set(allowedHosts)], allowedOrigins: [...new Set(allowedOrigins)] };
 }

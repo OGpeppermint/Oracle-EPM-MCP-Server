@@ -46,7 +46,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### @modelcontextprotocol/sdk@1.30.0
+### @modelcontextprotocol/sdk@1.32.1
 
 - Declared license: MIT
 - Repository: git+https://github.com/modelcontextprotocol/typescript-sdk.git
@@ -1028,7 +1028,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### fast-uri@3.1.5
+### fast-uri@3.1.8
 
 - Declared license: BSD-3-Clause
 - Repository: git+https://github.com/fastify/fast-uri.git
@@ -1349,7 +1349,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### hono@4.13.1
+### hono@4.13.13
 
 - Declared license: MIT
 - Repository: git+https://github.com/honojs/hono.git
@@ -1467,7 +1467,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### ip-address@10.5.0
+### ip-address@10.7.4
 
 - Declared license: MIT
 - Repository: https://github.com/beaugunderson/ip-address.git
@@ -2157,7 +2157,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### proxy-addr@2.0.7
+### proxy-addr@2.0.8
 
 - Declared license: MIT
 - Repository: jshttp/proxy-addr
@@ -2189,7 +2189,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### qs@6.15.3
+### qs@6.16.1
 
 - Declared license: BSD-3-Clause
 - Repository: https://github.com/ljharb/qs.git

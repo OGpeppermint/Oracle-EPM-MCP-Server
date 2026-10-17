@@ -40,6 +40,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `PORT` | Optional HTTP port; defaults to `3001` |
 | `HOST` | HTTP listening address; defaults to `127.0.0.1` |
 | `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
+| `MCP_ALLOWED_ORIGINS` | Comma-separated permitted HTTP/HTTPS browser origins; unset or empty allows no browser origins |
 
 For a container or remote deployment, set `HOST=0.0.0.0` and set `MCP_ALLOWED_HOSTS` to the hostnames used to reach the service, for example `mcp.example.com,localhost,127.0.0.1`. Allowlist entries contain no scheme, port, or path; IPv6 entries use brackets. Configure the reverse proxy and health probes to send an allowed Host header. The allowlist applies to both `/mcp` and `/health`.
 
@@ -49,7 +50,17 @@ Both HTTP and stdio startup require a nonblank `EPM_BASE_URL`, `EPM_USERNAME`, a
 
 In HTTP mode, `HOST` must be a hostname or unbracketed IP address, `PORT` must be an integer from 0 to 65535 (0 selects a temporary port), and `MCP_ALLOWED_HOSTS` must contain valid hostnames or IP addresses with no empty entries or wildcards. Omit HTTP settings to use their defaults. Stdio mode ignores HTTP-only settings.
 
-`GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication and restricted browser CORS remain planned in the [roadmap](docs/roadmap.md).
+Set `MCP_ALLOWED_ORIGINS` to the origins of the browser pages that call this service, such as the Command Center website. This setting includes the scheme and optional port, unlike the server hostname allowlist. For example:
+
+```dotenv
+MCP_ALLOWED_ORIGINS=http://localhost:5173,https://your-command-center.example.com
+```
+
+Replace the example with your actual browser origins. Entries cannot contain credentials, paths, queries, fragments, or wildcards; a trailing slash and default port are normalized away. Origins match exactly, so different schemes, subdomains, and non-default ports require separate entries. Restart the server after changing configuration. On Render, set this variable in the service's Environment settings.
+
+Requests with an unapproved `Origin` header (including `Origin: null`) receive HTTP 403 before the MCP handler runs. An unset or empty list rejects all Origin-bearing requests. Native MCP clients and health probes without an Origin header continue to work. Allowed browser requests receive origin-specific CORS headers; preflight supports MCP methods and headers, and browsers can read session and authentication-challenge response headers. Cookie-based CORS credentials are not enabled. These controls apply to `/mcp` and `/health` and do not authenticate callers.
+
+`GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication remains planned in the [roadmap](docs/roadmap.md).
 
 ## API coverage and validation
 
@@ -57,7 +68,7 @@ The server exposes 14 read-only tools. See [the tool reference](docs/tool-refere
 
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
 
-Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames, and MCP HTTP connectivity on a temporary port. This check uses no Oracle API calls and is included in `npm run release:check`.
+Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames and browser origins, preflight responses, browser MCP headers, and MCP HTTP connectivity on temporary ports. It covers both an explicit browser allowlist and an empty list. This check uses no Oracle API calls and is included in `npm run release:check`.
 
 Run `npm run verify:config` to build and check startup validation, safe error reporting, HTTP configuration, and stdio discovery without a default application. It is also included in `npm run release:check`. Verification uses synthetic Oracle settings and makes no Oracle API calls.
 
