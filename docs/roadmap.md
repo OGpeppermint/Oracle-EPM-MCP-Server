@@ -1,6 +1,6 @@
 # Oracle EPM NSPB MCP roadmaps
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-10-17
 
 The project roadmap is separated by concern so endpoint scope, identity, and tenant architecture can evolve independently.
 
@@ -29,16 +29,16 @@ Status labels:
 ### Milestone 1: read-only NSPB MCP foundation — Complete
 
 - HTTP Streamable MCP and local `stdio` transports.
-- MCP App command-center UI with Overview, Metadata, Data, and Jobs views.
-- Fifteen active tools covering API discovery, applications, summaries, plan types, dimensions, members, job inspection, substitution variables, and data-slice export.
+- Standard MCP interface for hosts and external clients, including the independently maintained Command Center.
+- Fourteen active tools covering API discovery, applications, summaries, plan types, dimensions, members, job inspection, substitution variables, data-slice export, and local connection status.
 - Descriptive tool schemas and a complete [tool reference](tool-reference.md).
 - Explicit JSON request headers and endpoint-specific Application Summary compatibility handling.
 - Removal of unsupported recent-job collection retrieval after Oracle returned HTTP 405.
-- Removal of job and business-rule execution from the server and UI.
-- Build, MCP contract, resource-linkage, and release-compliance verification.
+- Removal of job and business-rule execution from the server.
+- Build, MCP contract, absence of GUI resources, and release-compliance verification.
 - Proprietary release placeholder, third-party notices, license texts, and automated notice checks.
 
-Exit state: the project operates as a single-environment, read-only MCP server and interactive MCP App. See the [endpoint roadmap](endpoint-roadmap.md).
+Exit state: the project operates as a single-environment, read-only MCP server with an optional GUI maintained in a separate repository. See the [endpoint roadmap](endpoint-roadmap.md).
 
 ### Milestone 2: production configuration and operational hardening — Next
 
@@ -47,7 +47,7 @@ Exit state: the project operates as a single-environment, read-only MCP server a
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
 - Restrict production CORS and document reverse-proxy, HTTPS, health-check, and shutdown behavior.
 - Add automated HTTP transport tests for content negotiation, session behavior, and MCP error responses.
-- Establish supported Node.js, MCP SDK, and MCP Apps SDK versions and an upgrade policy.
+- Establish supported Node.js and MCP SDK versions and an upgrade policy.
 - Add dependency, secret, and vulnerability scanning to the release workflow.
 
 Release gate: repeatable deployment, no secrets in artifacts or logs, graceful failure behavior, and passing transport/security checks.

@@ -2,14 +2,14 @@
 
 Last reviewed: 2026-08-12
 
-The server exposes 15 active tools. The active surface is read-only: it can discover and inspect Planning resources, export a targeted data slice, and inspect existing jobs, but it cannot submit, rerun, cancel, or otherwise execute jobs or business rules.
+The server exposes 14 active tools. The active surface is read-only: it can discover and inspect Planning resources, export a targeted data slice, and inspect existing jobs, but it cannot submit, rerun, cancel, or otherwise execute jobs or business rules.
 
 ## Common behavior
 
 - Oracle credentials come only from the MCP server environment and are never accepted as tool arguments or returned in results.
 - When an `application` argument is optional, omitting it uses `EPM_APPLICATION` from the server environment.
 - The 13 Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
-- `open-epm-command-center` and `refresh-epm-dashboard` return command-center state directly in `structuredContent`.
+- `get-epm-connection-status` returns sanitized connection configuration and `checkedAt` directly in `structuredContent`.
 - Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with concise text; credentials are not exposed.
 - All active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
 
@@ -17,21 +17,20 @@ The server exposes 15 active tools. The active surface is read-only: it can disc
 
 | Tool | Functionality | Visibility |
 | --- | --- | --- |
-| `get-epm-api-versions` | Discover supported Planning REST API versions and verify basic connectivity. | Model and app |
-| `list-epm-applications` | List applications accessible to the configured service account. | Model and app |
-| `get-epm-application-summary` | Retrieve Oracle's AI-focused structural application summary. | Model and app |
-| `list-epm-plan-types` | List cubes or plan types in an application. | Model and app |
-| `list-epm-dimensions` | List and filter dimensions for a selected plan type. | Model and app |
-| `get-epm-dimension` | Retrieve a dimension hierarchy with selectable fields and aliases. | Model and app |
-| `get-epm-member` | Retrieve detailed properties for one exact dimension member. | Model and app |
-| `list-epm-job-definitions` | Discover configured job types and exact job names without executing them. | Model and app |
-| `get-epm-job-status` | Read the current status of an existing Oracle job ID. | Model and app |
-| `get-epm-job-details` | Read paginated processing messages for an existing import or export job. | Model and app |
-| `list-epm-substitution-variables` | List application- and plan-type-scoped substitution variables. | Model and app |
-| `get-epm-substitution-variable` | Retrieve one exact substitution variable. | Model and app |
-| `export-epm-data-slice` | Read a targeted multidimensional Planning grid. | Model and app |
-| `open-epm-command-center` | Open the interactive UI with sanitized local connection configuration. | Model; renders app |
-| `refresh-epm-dashboard` | Re-check local connection configuration in an open UI. | App only |
+| `get-epm-api-versions` | Discover supported Planning REST API versions and verify basic connectivity. | Model |
+| `list-epm-applications` | List applications accessible to the configured service account. | Model |
+| `get-epm-application-summary` | Retrieve Oracle's AI-focused structural application summary. | Model |
+| `list-epm-plan-types` | List cubes or plan types in an application. | Model |
+| `list-epm-dimensions` | List and filter dimensions for a selected plan type. | Model |
+| `get-epm-dimension` | Retrieve a dimension hierarchy with selectable fields and aliases. | Model |
+| `get-epm-member` | Retrieve detailed properties for one exact dimension member. | Model |
+| `list-epm-job-definitions` | Discover configured job types and exact job names without executing them. | Model |
+| `get-epm-job-status` | Read the current status of an existing Oracle job ID. | Model |
+| `get-epm-job-details` | Read paginated processing messages for an existing import or export job. | Model |
+| `list-epm-substitution-variables` | List application- and plan-type-scoped substitution variables. | Model |
+| `get-epm-substitution-variable` | Retrieve one exact substitution variable. | Model |
+| `export-epm-data-slice` | Read a targeted multidimensional Planning grid. | Model |
+| `get-epm-connection-status` | Check sanitized local connection configuration without calling Oracle. | Model |
 
 ## Discovery and application context
 
@@ -180,25 +179,13 @@ Retrieves detailed processing records for an existing Planning import or export 
 - Side effects: none.
 - Scope note: Oracle documents this details endpoint for `IMPORT_DATA`, `EXPORT_DATA`, `IMPORT_METADATA`, and `EXPORT_METADATA` jobs.
 
-## MCP App controls
+## Connection status
 
-### `open-epm-command-center`
+### `get-epm-connection-status`
 
-Opens the interactive Planning Command Center. Use it when the user wants to work visually with application discovery, metadata, substitution variables, data slices, or read-only job inspection.
+Checks local server configuration without calling Oracle. Takes no arguments and returns sanitized `connection` and ISO 8601 `checkedAt` fields. Missing variables appear in `connection.missing`. Safe to retry and read-only.
 
-- Arguments: none.
-- Returns: a sanitized `connection` object and an ISO 8601 `checkedAt` timestamp.
-- UI behavior: links and renders `ui://oracle-epm-nspb/command-center.html`.
-- Side effects: none. Opening the UI does not call Oracle; API requests occur only when a documented read-only operation is selected.
-
-### `refresh-epm-dashboard`
-
-Refreshes the state of an already-open Command Center. This tool is app-only so the embedded UI can re-check local server configuration without adding another model-selectable action.
-
-- Arguments: none.
-- Returns: refreshed `connection` and `checkedAt` fields.
-- Visibility: app only; it is intentionally hidden from model tool selection.
-- Side effects: read-only and safe to retry.
+The Command Center GUI, maintained in a separate repository, calls these standard MCP tools over HTTP. The MCP server exposes no UI resources or app-only tools.
 
 ## Intentionally unavailable execution tools
 

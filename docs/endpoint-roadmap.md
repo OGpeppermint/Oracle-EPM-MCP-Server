@@ -46,7 +46,7 @@ Job submission was removed from the active server and UI on 2026-08-12. The read
 | `execute-epm-job` | `POST /HyperionPlanning/rest/v3/applications/{application}/jobs` | Generic job submission can calculate, import, clear, refresh, restructure, export, or otherwise change application state. Restore only with reviewed job-specific schemas, authorization policy, explicit confirmation, and ambiguous-timeout handling. |
 | `run-epm-business-rule` | Same jobs endpoint with `jobType=Rules` | Business rules can modify Planning data, and runtime prompts are customer-defined. Restore only with rule discovery/validation and deliberate execution controls. |
 
-Neither deferred tool is registered with MCP, callable by the model or app, or rendered in the command-center UI. `scripts/verify-mcp.mjs` asserts that both names remain absent.
+Neither deferred tool is registered with MCP or callable by any MCP client. `scripts/verify-mcp.mjs` asserts that both names remain absent.
 
 ## Deferred: next likely additions
 

@@ -11,11 +11,9 @@ const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
 const licenseFamilySources = new Map([
   ["MIT.txt", "node_modules/@modelcontextprotocol/sdk/LICENSE"],
   ["Apache-2.0.txt", "node_modules/typescript/LICENSE"],
-  ["MPL-2.0.txt", "node_modules/lightningcss/LICENSE"],
   ["BSD-2-Clause.txt", "node_modules/json-schema-typed/LICENSE.md"],
   ["BSD-3-Clause.txt", "node_modules/fast-uri/LICENSE"],
   ["ISC.txt", "node_modules/inherits/LICENSE"],
-  ["0BSD.txt", "node_modules/tslib/LICENSE.txt"],
 ]);
 
 function findLegalFiles(packageDirectory) {

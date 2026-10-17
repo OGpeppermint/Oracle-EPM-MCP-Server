@@ -1,44 +1,39 @@
+import assert from "node:assert/strict";
+import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const expectedUiTools = [
-  "get-epm-api-versions",
-  "list-epm-applications",
-  "get-epm-application-summary",
-  "list-epm-plan-types",
-  "list-epm-dimensions",
-  "get-epm-dimension",
-  "get-epm-member",
-  "list-epm-job-definitions",
-  "get-epm-job-status",
-  "get-epm-job-details",
-  "list-epm-substitution-variables",
-  "get-epm-substitution-variable",
-  "export-epm-data-slice",
+const expectedTools = [
+  "get-epm-api-versions", "list-epm-applications", "get-epm-application-summary",
+  "list-epm-plan-types", "list-epm-dimensions", "get-epm-dimension", "get-epm-member",
+  "list-epm-job-definitions", "get-epm-job-status", "get-epm-job-details",
+  "list-epm-substitution-variables", "get-epm-substitution-variable", "export-epm-data-slice",
+  "get-epm-connection-status",
 ];
-const intentionallyDisabledTools = ["execute-epm-job", "run-epm-business-rule"];
-const resourceUri = "ui://oracle-epm-nspb/command-center.html";
-
-const client = new Client({ name: "oracle-epm-ui-verifier", version: "1.0.0" });
-const transport = new StdioClientTransport({ command: "node", args: ["dist/main.js", "--stdio"] });
-
+const client = new Client({ name: "oracle-epm-server-verifier", version: "1.0.0" });
+const root = path.resolve(import.meta.dirname, "..");
+const transport = new StdioClientTransport({
+  command: process.execPath,
+  args: [path.join(root, "dist/main.js"), "--stdio"],
+  cwd: root,
+});
 try {
   await client.connect(transport);
-  const listed = await client.listTools();
-  const resources = await client.listResources();
-  const resource = await client.readResource({ uri: resourceUri });
-  const html = resource.contents[0]?.text ?? "";
-  const toolsByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
-  const missingTools = expectedUiTools.filter((name) => !toolsByName.has(name));
-  const unlinkedTools = expectedUiTools.filter((name) => toolsByName.get(name)?._meta?.ui?.resourceUri !== resourceUri);
-  const hiddenFromApp = expectedUiTools.filter((name) => !toolsByName.get(name)?._meta?.ui?.visibility?.includes("app"));
-  const unexpectedlyEnabledTools = intentionallyDisabledTools.filter((name) => toolsByName.has(name));
-  const missingTabs = ["Start with context", "Explore metadata", "Export a data slice", "Inspect jobs"].filter((marker) => !html.includes(marker));
-  const resourceValid = resources.resources.some(({ uri, mimeType }) => uri === resourceUri && mimeType === "text/html;profile=mcp-app");
-  const failures = { missingTools, unlinkedTools, hiddenFromApp, unexpectedlyEnabledTools, missingTabs, resourceValid };
-
-  console.log(JSON.stringify({ toolCount: listed.tools.length, htmlBytes: html.length, ...failures }, null, 2));
-  if (missingTools.length || unlinkedTools.length || hiddenFromApp.length || unexpectedlyEnabledTools.length || missingTabs.length || !resourceValid) process.exitCode = 1;
+  const { tools } = await client.listTools();
+  assert.deepEqual(tools.map(({ name }) => name).sort(), [...expectedTools].sort());
+  for (const tool of tools) {
+    assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name} must be read-only`);
+    assert.equal(tool._meta?.ui, undefined, `${tool.name} must not link a GUI`);
+    assert.equal(tool._meta?.["ui/resourceUri"], undefined);
+  }
+  assert.equal(client.getServerCapabilities()?.resources, undefined, "Server must not expose GUI resources");
+  const result = await client.callTool({ name: "get-epm-connection-status", arguments: {} });
+  assert.ok(!result.isError);
+  assert.equal(typeof result.structuredContent?.connection?.configured, "boolean");
+  assert.ok(Array.isArray(result.structuredContent?.connection?.missing));
+  assert.ok(Number.isFinite(Date.parse(result.structuredContent?.checkedAt)));
+  assert.equal(result.structuredContent?.connection?.password, undefined);
+  console.log(`Verified ${tools.length} read-only MCP tools, connection status, and absence of GUI resources and execution tools.`);
 } finally {
   await client.close();
 }

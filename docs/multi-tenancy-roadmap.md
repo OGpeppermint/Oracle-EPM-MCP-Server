@@ -45,7 +45,7 @@ Include tenant identity in every cache and state key, including:
 - EPM metadata and data caches.
 - Rate and concurrency limits, queues, circuit breakers, and retry budgets.
 - Idempotency and asynchronous job-status records.
-- MCP App preferences and UI state.
+- Client-visible session state and tool results. External clients own their UI preferences and state.
 - Metrics, traces, logs, diagnostics, and exports.
 
 Apply per-tenant quotas and backpressure. Bound pagination and response sizes. Redact Planning values, credentials, tokens, and personal data from logs. Encrypt traffic and stored tenant data. Define suspension, revocation, export, retention, and deletion. Make support access approved, time-limited, attributable, and auditable. Errors and telemetry must not expose other tenants.
@@ -73,7 +73,7 @@ Support suspension, reauthorization, secret rotation, issuer/client migration, c
 - Logs, traces, metrics, exports, and support tools preserve isolation.
 - Suspension and revocation take effect within documented bounds.
 - Key rotation and token-refresh races remain available and isolated.
-- The MCP App never receives server-side credentials, tokens, or tenant secrets.
+- MCP hosts and external clients never receive server-side Oracle credentials, Oracle tokens, or tenant secrets.
 
 Use at least two deliberately similar tenants in unit, integration, and end-to-end negative tests. Require a deployment-level penetration test before pooled SaaS release.
 
