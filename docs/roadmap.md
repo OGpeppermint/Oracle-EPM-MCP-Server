@@ -29,6 +29,7 @@ Status labels:
 ### Milestone 1: read-only NSPB MCP foundation — Complete
 
 - HTTP Streamable MCP and local `stdio` transports.
+- Configurable HTTP listening address (`HOST`), hostname validation (`MCP_ALLOWED_HOSTS`), and a credential-free `GET /health` liveness endpoint.
 - Standard MCP interface for hosts and external clients, including the independently maintained Command Center.
 - Fourteen active tools covering API discovery, applications, summaries, plan types, dimensions, members, job inspection, substitution variables, data-slice export, and local connection status.
 - Descriptive tool schemas and a complete [tool reference](tool-reference.md).
@@ -45,7 +46,8 @@ Exit state: the project operates as a single-environment, read-only MCP server w
 - Extend the documented configuration strategy for production deployment: npm startup commands load an optional local `.env`, and deployed environment variables take precedence.
 - Validate all required settings at startup with safe, actionable errors.
 - Add structured logs, correlation IDs, redaction, request timeouts, bounded retries, and response-size controls.
-- Restrict production CORS and document reverse-proxy, HTTPS, health-check, and shutdown behavior.
+- Replace unrestricted `cors()` with an explicit browser-origin allowlist for the Command Center and approved browser clients; test allowed origins, rejected origins, and preflight requests.
+- Document reverse-proxy, HTTPS, health-probe Host headers, and shutdown behavior. The existing `/health` route reports liveness without checking Oracle connectivity.
 - Add automated HTTP transport tests for content negotiation, session behavior, and MCP error responses.
 - Establish supported Node.js and MCP SDK versions and an upgrade policy.
 - Add dependency, secret, and vulnerability scanning to the release workflow.
@@ -56,6 +58,7 @@ Release gate: repeatable deployment, no secrets in artifacts or logs, graceful f
 
 - Register the MCP server as an Oracle IDCS/OCI IAM protected resource.
 - Add OAuth Protected Resource Metadata, bearer challenges, and JWT verification.
+- Enforce incoming-request authentication before the `/mcp` handler; reject missing or invalid access tokens. Keep `/health` available without credentials and preserve the separation between inbound MCP tokens and outbound Oracle credentials.
 - Enforce exact issuer, audience, signature, time, and scope validation.
 - Use Authorization Code with PKCE for compatible interactive clients.
 - Keep `stdio` local and environment-authenticated rather than attempting browser OAuth.

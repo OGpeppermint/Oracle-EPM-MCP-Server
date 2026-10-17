@@ -37,12 +37,20 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `EPM_PASSWORD` | Service-account password |
 | `EPM_APPLICATION` | Planning application name, such as `NSPB` |
 | `PORT` | Optional HTTP port; defaults to `3001` |
+| `HOST` | HTTP listening address; defaults to `127.0.0.1` |
+| `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
+
+For a container or remote deployment, set `HOST=0.0.0.0` and set `MCP_ALLOWED_HOSTS` to the hostnames used to reach the service, for example `mcp.example.com,localhost,127.0.0.1`. Allowlist entries contain no scheme, port, or path; IPv6 entries use brackets. Configure the reverse proxy and health probes to send an allowed Host header. The allowlist applies to both `/mcp` and `/health`.
+
+`GET /health` returns HTTP 200 with `{"status":"ok"}` when the HTTP service is running. This liveness check does not contact Oracle or validate Oracle credentials. HTTP settings do not apply to stdio mode. Incoming MCP authentication and restricted browser CORS remain planned in the [roadmap](docs/roadmap.md).
 
 ## API coverage and validation
 
 The server exposes 14 read-only tools. See [the tool reference](docs/tool-reference.md) for arguments, results, and access notes, and [the roadmap](docs/roadmap.md) for deferred work.
 
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
+
+Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames, and MCP HTTP connectivity on a temporary port. This check uses no Oracle API calls and is included in `npm run release:check`.
 
 ## License and release checks
 

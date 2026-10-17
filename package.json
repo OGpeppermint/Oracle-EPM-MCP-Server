@@ -17,9 +17,10 @@
                     "start:stdio":  "node --env-file-if-exists=.env dist/main.js --stdio",
                     "check":  "tsc -p tsconfig.json --noEmit",
                     "verify:mcp":  "npm run build && node scripts/verify-mcp.mjs",
+                    "verify:http":  "npm run build && node scripts/verify-http.mjs",
                     "notices":  "node scripts/generate-third-party-notices.mjs",
                     "notices:check":  "node scripts/generate-third-party-notices.mjs --check",
-                    "release:check":  "npm run build && npm run notices:check && node scripts/verify-mcp.mjs"
+                    "release:check":  "npm run build && npm run notices:check && node scripts/verify-mcp.mjs && node scripts/verify-http.mjs"
                 },
     "dependencies":  {
                          "@modelcontextprotocol/sdk":  "^1.30.0",
