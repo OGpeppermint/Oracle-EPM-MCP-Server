@@ -56,6 +56,7 @@ Dependency audit baseline refreshed on 2026-10-17: upgraded the MCP SDK, fast-ur
 - Document reverse-proxy, HTTPS, and health-probe Host headers. The existing `/health` route reports liveness without checking Oracle connectivity.
 - **Complete:** automated HTTP transport tests for content negotiation, parser and MCP errors, method handling, protocol negotiation/version headers, stateless session behavior, notifications, SSE cancellation, concurrent RPC-ID reuse, request correlation, and recovery after invalid requests. `npm run verify:http` runs both browser-origin profiles with a fixture that blocks all Oracle fetches. The SDK's malformed-parameter error-code compatibility is documented in the README.
 - Establish supported Node.js and MCP SDK versions and an upgrade policy.
+- **Complete:** GitHub Actions CI runs the full release check after a clean locked dependency installation on Node.js 22/24 and Ubuntu/Windows for pushes, pull requests, and manual runs. Actions are pinned, repository permissions are read-only, and no Oracle credentials are required. Enforcing these checks before merging requires repository branch-protection or ruleset configuration.
 - Add dependency, secret, and vulnerability scanning to the release workflow.
 
 Release gate: repeatable deployment, no secrets in artifacts or logs, graceful failure behavior, and passing transport/security checks.

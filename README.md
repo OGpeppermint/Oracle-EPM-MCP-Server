@@ -117,6 +117,14 @@ Run `npm run verify:logging` to check concurrent HTTP request correlation, sanit
 
 Run `npm run verify:oracle` to check retry eligibility and budgets, exponential backoff and jitter, `Retry-After`, shared deadlines and summary fallback, byte limits, stalled downloads, and cancellation during retry waits. Oracle requests are mocked; the checks make no live Oracle calls and are included in `npm run release:check`.
 
+## Continuous integration
+
+[The CI workflow](.github/workflows/ci.yml) runs on pushes, pull requests, and manual dispatch from GitHub's Actions tab. Each run checks Node.js 22 and 24 on Ubuntu and Windows. Every matrix job installs the locked dependencies with `npm ci --include=dev --no-audit --no-fund`, then runs `npm run release:check`, which generates `dist/`, checks third-party notices, and runs the configuration, shutdown, logging, Oracle-client, stdio, and HTTP verification.
+
+CI requires no repository secrets, Oracle credentials, or committed `.env` file. Tests supply synthetic settings and use mocks or local connection-status calls. The workflow uses a read-only repository token, disables persisted checkout credentials, pins actions to release commit hashes, and cancels superseded runs on the same branch or pull request. Jobs have a ten-minute timeout, and a failure in one matrix job does not cancel the others.
+
+Commit and push the workflow to activate it. In GitHub's Actions tab, inspect the four `Release checks` jobs. To make passing CI a merge requirement, select these checks in the repository's branch protection or ruleset settings after the first run. Dependency vulnerability and secret scanning remain separate roadmap work; this workflow runs the existing release verification.
+
 ## License and release checks
 
 This software is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE.txt](LICENSE.txt) for the full terms. Third-party dependencies retain their own licenses and notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `licenses/`. Generate production dependency notices with `npm run notices` and run `npm run release:check` before packaging. Install distributable runtime dependencies with `npm ci --omit=dev`. Development dependencies and GUI assets do not belong in the server distribution.
