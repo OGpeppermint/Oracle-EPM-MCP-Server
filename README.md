@@ -105,7 +105,9 @@ The server exposes 14 read-only tools. See [the tool reference](docs/tool-refere
 
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
 
-Run `npm run verify:http` to build and check the health endpoint, allowed and rejected HTTP hostnames and browser origins, preflight responses, browser MCP headers, and MCP HTTP connectivity on temporary ports. It covers both an explicit browser allowlist and an empty list. This check uses no Oracle API calls and is included in `npm run release:check`.
+Run `npm run verify:http` to build and run named HTTP transport tests on temporary ports, with both an explicit browser allowlist and an empty list. Coverage includes health, hostname and origin restrictions, CORS/preflight, SDK connectivity, Accept/Content-Type negotiation, parser and JSON-RPC errors, unknown methods/tools and invalid arguments, protocol negotiation and version headers, empty notification/response acknowledgments, GET stream cancellation, DELETE and unsupported methods, stateless concurrent clients reusing RPC IDs, request IDs, private-value exclusion, and recovery after rejected requests. A test-only fixture blocks and fails verification on any attempted Oracle fetch; no real Oracle calls or credentials are used. These checks are included in `npm run release:check`.
+
+The current SDK can classify malformed method-parameter envelopes as JSON-RPC `-32603` (internal error) instead of `-32602` (invalid parameters). Verification accepts either for that case while requiring a structured error and the original RPC ID. Invalid tool arguments are checked separately as tool error results.
 
 Run `npm run verify:config` to build and check startup validation, safe error reporting, HTTP configuration, and stdio discovery without a default application. It is also included in `npm run release:check`. Verification uses synthetic Oracle settings and makes no Oracle API calls.
 
