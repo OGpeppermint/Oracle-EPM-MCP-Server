@@ -9,6 +9,7 @@ const expectedTools = [
   "list-epm-job-definitions", "get-epm-job-status", "get-epm-job-details",
   "list-epm-substitution-variables", "get-epm-substitution-variable", "export-epm-data-slice",
   "get-epm-connection-status",
+  "create-epm-rule",
 ];
 const client = new Client({ name: "oracle-epm-server-verifier", version: "1.0.0" });
 const root = path.resolve(import.meta.dirname, "..");
@@ -28,7 +29,7 @@ try {
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map(({ name }) => name).sort(), [...expectedTools].sort());
   for (const tool of tools) {
-    assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name} must be read-only`);
+    assert.equal(tool.annotations?.readOnlyHint, tool.name !== "create-epm-rule", `${tool.name} has the wrong read-only annotation`);
     assert.equal(tool._meta?.ui, undefined, `${tool.name} must not link a GUI`);
     assert.equal(tool._meta?.["ui/resourceUri"], undefined);
   }
@@ -39,7 +40,8 @@ try {
   assert.ok(Array.isArray(result.structuredContent?.connection?.missing));
   assert.ok(Number.isFinite(Date.parse(result.structuredContent?.checkedAt)));
   assert.equal(result.structuredContent?.connection?.password, undefined);
-  console.log(`Verified ${tools.length} read-only MCP tools, connection status, and absence of GUI resources and execution tools.`);
+  assert.equal(tools.find(({ name }) => name === "create-epm-rule")?.annotations?.destructiveHint, true);
+  console.log(`Verified ${tools.length} MCP tools, including create-epm-rule, connection status, and absence of GUI resources and generic execution tools.`);
 } finally {
   await client.close();
 }

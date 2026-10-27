@@ -1,6 +1,6 @@
 # Oracle EPM NSPB MCP Server
 
-Read-only MCP server for Oracle EPM Planning / NSPB. It exposes application discovery, metadata exploration, substitution variables, targeted data slices, existing-job inspection, and sanitized connection status. Job and business-rule execution remain disabled.
+MCP server for Oracle EPM Planning / NSPB. It exposes application discovery, metadata exploration, substitution variables, targeted data slices, existing-job inspection, sanitized connection status, and scoped Calculation Manager rule creation. Job and business-rule execution remain disabled.
 
 ## Setup
 
@@ -27,6 +27,8 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 - `src/logging.ts` provides JSON logging and request correlation.
 - `src/server.ts` defines the MCP tools.
 - `src/oracle-client.ts` handles Oracle requests, deadlines, retries, response limits, and cancellation.
+- `src/create-rule.ts` orchestrates one rule snapshot upload and import.
+- `src/snapshot-*.ts` validates rule inputs and builds the LCM XML and ZIP entirely in memory.
 - `scripts/` contains MCP verification and dependency-notice tooling.
 - `docs/` contains the tool reference and server roadmaps.
 - `licenses/` and `THIRD_PARTY_NOTICES.md` contain server dependency license material.
@@ -43,6 +45,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `EPM_REQUEST_TIMEOUT_MS` | Total Oracle operation deadline, including retries; defaults to `30000` milliseconds |
 | `EPM_MAX_RETRIES` | Additional attempts for eligible GET failures; defaults to `2`, or `0` to disable |
 | `EPM_MAX_RESPONSE_BYTES` | Maximum decoded Oracle response body size; defaults to `5242880` bytes (5 MiB) |
+| `EPM_CREATE_RULE_POLL_TIMEOUT_MS` | Maximum wait for each asynchronous upload extraction or import job; defaults to `300000` milliseconds (5 minutes) |
 | `PORT` | Optional HTTP port; defaults to `3001` |
 | `HOST` | HTTP listening address; defaults to `127.0.0.1` |
 | `MCP_ALLOWED_HOSTS` | Comma-separated permitted HTTP hostnames; defaults to `localhost,127.0.0.1,[::1]` |
@@ -101,7 +104,9 @@ Oracle failures return safe HTTP-status guidance or stable codes such as `EPM_NE
 
 ## API coverage and validation
 
-The server exposes 14 read-only tools. See [the tool reference](docs/tool-reference.md) for arguments, results, and access notes, and [the roadmap](docs/roadmap.md) for deferred work.
+The server exposes 14 read-only tools and `create-epm-rule`. The create tool accepts a rule script, optional run-time prompt definitions, and explicit Script/Template dependencies. It builds a Calculation Manager LCM snapshot in memory, uploads the ZIP with Oracle's v2 file API, imports the snapshot, and waits for the import result in one MCP call. It does not deploy or run the rule. Import can affect a same-named artifact, so use a new rule name when creating a new rule. See [the tool reference](docs/tool-reference.md) for arguments and results.
+
+The snapshot builder runs in the Node process and makes no Oracle request or local pod access; no snapshot file is needed. A running import that exceeds the poll timeout returns an error with the Oracle job ID and an uncertain-outcome flag; check the job before retrying the create call. Keep the MCP HTTP endpoint limited to trusted clients because `create-epm-rule` writes to Oracle.
 
 Run `npm run check` for TypeScript validation and `npm run verify:mcp` to build and verify tool discovery, connection status, disabled execution tools, and absence of GUI resources over a real MCP stdio connection.
 
@@ -116,6 +121,10 @@ Run `npm run verify:shutdown` to check idle shutdown, active MCP request drainin
 Run `npm run verify:logging` to check concurrent HTTP request correlation, sanitized Oracle errors, parser errors and early rejections, username masking, clean stdio communication, and successful JSON/Markdown tool results. Synthetic secrets and mocked Oracle responses verify that private values do not enter error results or application logs. These checks are included in `npm run release:check`.
 
 Run `npm run verify:oracle` to check retry eligibility and budgets, exponential backoff and jitter, `Retry-After`, shared deadlines and summary fallback, byte limits, stalled downloads, and cancellation during retry waits. Oracle requests are mocked; the checks make no live Oracle calls and are included in `npm run release:check`.
+
+Run `npm run verify:create-rule` to check the snapshot → upload → extraction → import sequence and failure/timeout reporting with a mocked Oracle client. This check is included in `npm run release:check` and does not contact Oracle. Live tenant import remains a separate acceptance test.
+
+Run `npm run verify:snapshot` to validate deterministic ZIP packaging, special-character paths, RTPs, explicit dependencies, and invalid-input handling in TypeScript. It is also included in `npm run release:check`.
 
 ## Continuous integration
 

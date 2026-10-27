@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { getRequestId, log, withRequestContext } from "./logging.js";
 import { epmRequest, EpmOperationError } from "./oracle-client.js";
+import { createRule, createRuleInputSchema, CreateRuleError } from "./create-rule.js";
 
 const connectionSchema = z.object({
   configured: z.boolean().describe("True only when all required Oracle EPM environment variables are present on the MCP server."),
@@ -99,7 +100,9 @@ async function observeTool(label: string, action: () => CallToolResult | Promise
         operation: label, errorCode: code, status: error instanceof EpmOperationError ? error.status : undefined,
         durationMs: Math.round((performance.now() - started) * 100) / 100,
       });
-      return { ...textResult(`${message} Request ID: ${requestId}.`, undefined, true), _meta: { requestId, errorCode: code } };
+      const details = error instanceof CreateRuleError ? { error: error.details() } : undefined;
+      return { ...textResult(`${message} Request ID: ${requestId}.`, details, true),
+        _meta: { requestId, errorCode: code, ...(error instanceof CreateRuleError ? { stage: error.stage } : {}) } };
     }
   });
 }
@@ -317,8 +320,23 @@ export function createServer(): McpServer {
     annotations: readAnnotations,
   }, async ({ application, planType, gridDefinition, exportPlanningData }) => apiResult("Data slice export", () => epmRequest(planningPath(application, `/plantypes/${encodeURIComponent(planType)}/exportdataslice`), { method: "POST", body: JSON.stringify({ gridDefinition, exportPlanningData: exportPlanningData ?? false }) })));
 
-  // Job and business-rule submission tools are intentionally not registered.
-  // Their former tool names, endpoint, covered job types, and restoration notes are preserved in docs/endpoint-roadmap.md.
+  server.registerTool("create-epm-rule", {
+    title: "Create Oracle EPM Calculation Manager Rule",
+    description: [
+      "Create one Calculation Manager rule from script text and explicit run-time prompt/dependency definitions.",
+      "For Calc Script, provide definitions for every {PromptName} reference. Supply Script/Template bodies for every %Script(...) or %Template(...) macro reference. Groovy RTPs use a /*RTPS: {PromptName}*/ header near the top of the script.",
+      "In one call, validate and build an LCM snapshot, upload it to Oracle EPM, import it, and wait for the import result. Success is reported only after Oracle reports completed import. This does not run or deploy the rule.",
+      "The named rule and supplied dependencies are imported into the selected application/cube. An existing artifact with the same name may be affected by Oracle's import settings. Use a new name for create-only behavior.",
+    ].join("\n\n"),
+    inputSchema: createRuleInputSchema,
+    outputSchema: { data: z.json().describe("Completed import result, snapshot name, job IDs and packaged artifacts.") },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, async (input) => observeTool("Rule creation", async () => {
+    const data = await createRule(input);
+    return textResult(`Rule ${data.ruleName} imported into ${data.application}/${data.planType}.`, { data });
+  }));
+
+  // Generic job and business-rule execution remain intentionally unregistered.
 
   server.registerTool("get-epm-connection-status", {
     title: "Get Oracle EPM Connection Configuration Status",

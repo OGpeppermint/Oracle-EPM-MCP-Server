@@ -1,6 +1,6 @@
 # Oracle EPM NSPB endpoint roadmap
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-10-26
 
 This file is the persistent inventory of Oracle Cloud EPM endpoints intentionally implemented or deferred in the MCP server. The scope is Oracle Planning/Planning Modules functionality applicable to NSPB plus shared Cloud EPM Platform and Infrastructure APIs that a Planning environment can use.
 
@@ -32,6 +32,7 @@ For detailed functionality, use cases, arguments, returns, visibility, and side 
 | `list-epm-substitution-variables` | `GET /HyperionPlanning/rest/v3/applications/{application}/substitutionvariables` | List application and plan-type scoped values. |
 | `get-epm-substitution-variable` | `GET /HyperionPlanning/rest/v3/applications/{application}/substitutionvariables/{name}` | Retrieve one variable. |
 | `export-epm-data-slice` | `POST /HyperionPlanning/rest/v3/applications/{application}/plantypes/{plantype}/exportdataslice` | Read a targeted JSON data grid. |
+| `create-epm-rule` | `POST /interop/rest/v2/files/upload`; `PATCH /interop/rest/v2/files/upload/{id}`; `POST /interop/rest/v2/files/upload/{id}/complete`; `GET /interop/rest/v2/status/jobs/{id}`; `POST /interop/rest/v2/snapshots/import`; `GET /interop/rest/v2/status/migration/{id}` | Upload and import one CALC-only snapshot, polling until Oracle reports success or failure. Does not deploy or run a rule. |
 
 The former command-center request `GET .../jobs?limit=12` was removed on 2026-08-12 after it produced HTTP 405 Method Not Allowed. Oracle documents the collection route for `POST` job execution and documents read-only status retrieval by identifier at `GET .../jobs/{jobId}`; the server now uses only the documented read-only job routes.
 

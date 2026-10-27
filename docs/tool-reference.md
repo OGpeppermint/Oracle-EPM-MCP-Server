@@ -1,19 +1,19 @@
 # Oracle EPM NSPB MCP tool reference
 
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-26
 
-The server exposes 14 active tools. The active surface is read-only: it can discover and inspect Planning resources, export a targeted data slice, and inspect existing jobs, but it cannot submit, rerun, cancel, or otherwise execute jobs or business rules.
+The server exposes 15 active tools: 14 read-only tools plus `create-epm-rule`, which imports one Calculation Manager rule. Job and business-rule execution remain unavailable.
 
 ## Common behavior
 
 - Oracle credentials come only from the MCP server environment and are never accepted as tool arguments or returned in results.
 - HTTP and stdio startup require a valid HTTPS Oracle origin and nonblank username and password. Invalid configuration exits before a transport opens; startup validation makes no Oracle request. `EPM_APPLICATION` remains optional.
 - When an `application` argument is optional, omitting it uses `EPM_APPLICATION` from the server environment.
-- The 13 Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
+- The 13 read-only Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
 - `get-epm-connection-status` returns sanitized connection configuration and `checkedAt` directly in `structuredContent`.
 - Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with safe text and a request ID. Raw Oracle error bodies, URLs, headers, parser exceptions, and stack traces are excluded.
 - Tool results include `_meta.requestId`; failures also include `_meta.errorCode`. HTTP calls share the ID returned in the `X-Request-Id` response header; stdio calls receive independent IDs. Match IDs to the JSON application logs on stderr.
-- All active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
+- `create-epm-rule` writes a rule through Oracle's snapshot upload and import APIs. All other active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
 - Oracle operations share a configurable 30-second total deadline across attempts and retry waits. Eligible GET requests retry transient network failures and HTTP 429/502/503/504 up to twice, with exponential backoff, jitter, and respect for `Retry-After`. POST exports, authentication/permission errors, invalid responses, and size-limit failures are not retried.
 - Oracle response bodies are limited to 5 MiB by default, counted as decoded bytes while downloading. An oversized response is cancelled and returned as `EPM_RESPONSE_TOO_LARGE`, without partial data. Use pagination, field selection, or a narrower data slice. See the [configuration reference](../README.md#oracle-request-limits-and-retries) for settings and bounds.
 
@@ -34,6 +34,7 @@ The server exposes 14 active tools. The active surface is read-only: it can disc
 | `list-epm-substitution-variables` | List application- and plan-type-scoped substitution variables. | Model |
 | `get-epm-substitution-variable` | Retrieve one exact substitution variable. | Model |
 | `export-epm-data-slice` | Read a targeted multidimensional Planning grid. | Model |
+| `create-epm-rule` | Build, upload, and import one Calculation Manager rule snapshot; wait for the import result. | Model |
 | `get-epm-connection-status` | Check sanitized local connection configuration without calling Oracle. | Model |
 
 ## Discovery and application context
@@ -182,6 +183,26 @@ Retrieves detailed processing records for an existing Planning import or export 
 - Returns: Oracle's detailed processing records, pagination information, and child-job links where supplied.
 - Side effects: none.
 - Scope note: Oracle documents this details endpoint for `IMPORT_DATA`, `EXPORT_DATA`, `IMPORT_METADATA`, and `EXPORT_METADATA` jobs.
+
+## Rule creation
+
+### `create-epm-rule`
+
+Creates one Calculation Manager rule in a single MCP call. The server validates the supplied rule, builds a CALC-only LCM ZIP in memory, uploads it to Oracle EPM, imports it, and polls asynchronous extraction/import jobs before returning success. The tool neither deploys nor executes the rule. Use a new rule name for create-only behavior: Oracle's import may affect a same-named artifact.
+
+- `application` (optional string): target application; defaults to `EPM_APPLICATION`.
+- `planType` (required string): exact cube/plan-type name.
+- `name` (required string): rule name.
+- `script` (required string): Calc Script or Groovy source text.
+- `language` (optional enum): `calcscript` (default) or `groovy`.
+- `description` (optional string): rule description.
+- `rtps` (optional array): definitions of run-time prompts referenced by the script. Each item needs `name` and `type`; supported types are `str`, `num`, `percent`, `member`, `members`, `dimension`, `cellref`, `str_as_num`, `date_as_num`, `member_range`, and `integer`. Optional fields cover scope, dimension, defaults, labels, validation, limits, and cell-reference prompts. Supply actual definitions rather than only prompt names.
+- `dependencies` (optional array): explicit Script or Template bodies used by the rule. Each item needs `kind` (`script` or `template`), `name`, and `script`; `language` and `description` are optional. These artifacts are imported with the rule.
+- Reference syntax: Calc Script RTPs use `{PromptName}`. Script/Template references use `%Script(...)` or `%Template(...)` and need matching `dependencies`. Groovy RTP declarations use a `/*RTPS: {PromptName}*/` header in the first 25 lines. Missing or unused RTP definitions and unresolved dependency references fail snapshot validation before any Oracle request.
+- Returns: `structuredContent.data` with `stage: "import_completed"`, application, cube, rule name, generated `snapshotName`, available Oracle job IDs, snapshot SHA-256, and packaged artifact list. This confirms Oracle reported a successful snapshot import, not rule deployment or execution.
+- Failure: an MCP error with `structuredContent.error` containing `code`, `stage` (`snapshot`, `upload`, `extraction`, or `import`), available job IDs, and `outcomeUncertain`. A timeout or network error after upload may leave work in progress; inspect the returned job ID before retrying.
+
+The snapshot builder runs in TypeScript within the server process. `EPM_CREATE_RULE_POLL_TIMEOUT_MS` defaults to five minutes. The builder has no local-pod mode and makes no Oracle request; the Oracle client performs upload and import using the server's existing credentials.
 
 ## Connection status
 

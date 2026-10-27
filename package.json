@@ -7,7 +7,7 @@
     "engines": {
         "node": ">=22.9.0"
     },
-    "description": "Read-only MCP server for Oracle EPM Planning / NSPB.",
+    "description": "MCP server for Oracle EPM Planning / NSPB with scoped rule creation.",
     "scripts": {
         "build": "tsc -p tsconfig.json",
         "dev": "node --env-file-if-exists=.env --import tsx --watch src/main.ts",
@@ -22,9 +22,11 @@
         "verify:shutdown": "npm run build && node --test scripts/verify-shutdown.mjs",
         "verify:logging": "npm run build && node --test scripts/verify-logging.mjs",
         "verify:oracle": "npm run build && node --test scripts/verify-oracle-client.mjs",
+        "verify:create-rule": "npm run build && node --test scripts/verify-create-rule.mjs",
+        "verify:snapshot": "npm run build && node --test scripts/verify-snapshot-builder.mjs",
         "notices": "node scripts/generate-third-party-notices.mjs",
         "notices:check": "node scripts/generate-third-party-notices.mjs --check",
-        "release:check": "npm run build && npm run notices:check && node --test scripts/verify-config.mjs scripts/verify-shutdown.mjs scripts/verify-logging.mjs scripts/verify-oracle-client.mjs && node scripts/verify-mcp.mjs && node --test scripts/verify-http.mjs"
+        "release:check": "npm run build && npm run notices:check && node --test scripts/verify-config.mjs scripts/verify-shutdown.mjs scripts/verify-logging.mjs scripts/verify-oracle-client.mjs scripts/verify-create-rule.mjs scripts/verify-snapshot-builder.mjs && node scripts/verify-mcp.mjs && node --test scripts/verify-http.mjs"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.1",

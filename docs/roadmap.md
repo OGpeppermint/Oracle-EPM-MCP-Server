@@ -1,6 +1,6 @@
 # Oracle EPM NSPB MCP roadmaps
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-26
 
 The project roadmap is separated by concern so endpoint scope, identity, and tenant architecture can evolve independently.
 
@@ -12,7 +12,7 @@ The project roadmap is separated by concern so endpoint scope, identity, and ten
 
 The roadmaps share these constraints:
 
-- The current product remains read-only in intent; job and business-rule execution remain disabled.
+- Read-only exploration and the scoped `create-epm-rule` import are active; job and business-rule execution remain disabled.
 - An inbound MCP access token must never be passed through to Oracle EPM.
 - Tenant identity must be established from trusted routing and verified authorization context, never from a tool argument.
 - Higher-risk write and administrative operations require separate design, authorization, confirmation, and testing before activation.
