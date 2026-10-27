@@ -325,7 +325,7 @@ export function createServer(): McpServer {
     description: [
       "Create one Calculation Manager rule from script text and explicit run-time prompt/dependency definitions.",
       "For Calc Script, provide definitions for every {PromptName} reference. Supply Script/Template bodies for every %Script(...) or %Template(...) macro reference. Groovy RTPs use a /*RTPS: {PromptName}*/ header near the top of the script.",
-      "In one call, validate and build an LCM snapshot, upload it to Oracle EPM, import it, and wait for the import result. Success is reported only after Oracle reports completed import. This does not run or deploy the rule.",
+      "In one call, build an LCM snapshot with Calculation Manager authoring and Planning rule artifacts, upload it to Oracle EPM, import it, and wait for the import result. Success confirms import, not an independently verified deployment status. This does not execute the rule.",
       "The named rule and supplied dependencies are imported into the selected application/cube. An existing artifact with the same name may be affected by Oracle's import settings. Use a new name for create-only behavior.",
     ].join("\n\n"),
     inputSchema: createRuleInputSchema,

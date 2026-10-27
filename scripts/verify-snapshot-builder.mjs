@@ -59,6 +59,23 @@ test("RTPs and explicit dependencies appear in the rule envelope and manifests",
   assert.match(files.get("Import.xml"), /pattern="Settings"/);
 });
 
+test("combined LCM snapshot includes Calculation Manager authoring and Planning rule artifacts", async () => {
+  const snapshot = await buildRuleSnapshot({ ...base, mode: "combined", name: "Allocate",
+    script: '%Script(name:="Settings")\n"Allocated" = 1;',
+    dependencies: [{ kind: "script", name: "Settings", script: "SET UPDATECALC OFF;" }],
+  });
+  const files = entries(snapshot.bytes);
+  const authoring = files.get("CALC-Calculation Manager/resource/Planning/APP|X/Plan:1/Rules/Allocate");
+  const planning = files.get("HP-APP|X/resource/Cube/Plan:1/Calculation Manager Rules/Allocate.xml");
+  assert.match(authoring, /%Script\(name:="Settings"\)/);
+  assert.match(planning, /SET UPDATECALC OFF;/);
+  assert.doesNotMatch(planning, /%Script\(name:="Settings"\)/);
+  assert.match(files.get("HP-APP|X/info/sourceInfo.xml"), /<Product>HP<\/Product>/);
+  assert.match(files.get("Import.xml"), /product="CALC"/);
+  assert.match(files.get("Import.xml"), /product="HP"/);
+  assert.equal(files.size, 11);
+});
+
 test("semantic input errors fail before any ZIP is created", async () => {
   await assert.rejects(buildRuleSnapshot({ ...base, script: "FIX({Missing}) ENDFIX" }),
     (error) => error.code === "MISSING_RTP");

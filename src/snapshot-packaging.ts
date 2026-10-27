@@ -1,4 +1,4 @@
-import { add, cloneXml, property, propertyValue, xml, xmlBytes, type XmlNode } from "./snapshot-xml.js";
+import { add, cloneXml, elements, first, property, propertyValue, setText, xml, xmlBytes, type XmlNode } from "./snapshot-xml.js";
 import { SnapshotError, type SnapshotRequest } from "./snapshot-validation.js";
 
 export type ArtifactKind = "rule" | "script" | "template";
@@ -65,50 +65,73 @@ function packageXml(tasks: Task[], provenance: boolean): Buffer {
   return xmlBytes(root, true);
 }
 
-function sourceInfo(): Buffer {
+function sourceInfo(application: string, deployed: boolean): Buffer {
   const root = xml("sourceInfo");
   const values = {
-    Application: "CalcApp", Product: "CALC", ProductVersion: "11.1.2.3",
-    Project: "Foundation", usesFriendlyNames: "false", metadataFileSupported: "false",
+    Application: deployed ? application : "CalcApp", Product: deployed ? "HP" : "CALC",
+    ProductVersion: "11.1.2.3",
+    Project: deployed ? "Default Application Group" : "Foundation",
+    usesFriendlyNames: "false", metadataFileSupported: "false",
     groupingSupported: "true", LCMVersion: "11.1.2",
   };
   for (const [key, value] of Object.entries(values)) add(root, key, {}, value);
   return xmlBytes(root, true);
 }
 
-export function buildFiles(request: SnapshotRequest, artifacts: Artifact[]): Map<string, Buffer> {
-  const category = "CALC-Calculation Manager";
-  const target: Endpoint = { type: "Application", product: "CALC", project: "Foundation",
-    application: "Calculation Manager" };
-  const filesystem: Endpoint = { type: "FileSystem", filePath: `/${category}` };
+export function buildFiles(request: SnapshotRequest, artifacts: Artifact[], effectiveBody: string): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
-  const listing = xml("artifactListing");
-  const folderSet = new Set<string>();
-  const items: Item[] = [];
-  for (const artifact of artifacts) {
-    const folder = `/Planning/${artifact.application}/${artifact.planType}/${folderNames[artifact.kind]}`;
-    items.push({ artifact, folder });
-    const parts = folder.slice(1).split("/");
-    for (let n = 1; n <= parts.length; n++) folderSet.add(`/${parts.slice(0, n).join("/")}`);
-    const path = `${category}/resource${folder}/${resourceName(artifact.name)}`;
-    if (files.has(path)) throw new SnapshotError("RESOURCE_COLLISION", `Resource collision: ${path}.`);
-    files.set(path, xmlBytes(artifact.root));
-    add(listing, "resource", {
-      name: artifact.name, id: artifact.name,
-      type: artifact.kind.charAt(0).toUpperCase() + artifact.kind.slice(1), cloneOnly: "false",
-      size: "", path: folder, pathAlias: folder, modifiedBy: "", lastUpdated: "",
-      description: propertyValue(artifact.element, "description") ?? "",
-    });
+  const exportTasks: Task[] = [];
+  const importTasks: Task[] = [];
+  const categories = [{ category: "CALC-Calculation Manager", deployed: false, selected: artifacts }];
+  if (request.mode === "combined") categories.push({
+    category: `HP-${request.application}`, deployed: true,
+    selected: artifacts.filter((artifact) => artifact.kind !== "script"),
+  });
+  for (const { category, deployed, selected } of categories) {
+    const target: Endpoint = { type: "Application", product: deployed ? "HP" : "CALC",
+      project: deployed ? "Default Application Group" : "Foundation",
+      application: deployed ? request.application : "Calculation Manager" };
+    const filesystem: Endpoint = { type: "FileSystem", filePath: `/${category}` };
+    const listing = xml("artifactListing");
+    const folderSet = new Set<string>();
+    const items: Item[] = [];
+    for (const artifact of selected) {
+      const folder = deployed
+        ? `/Cube/${artifact.planType}/Calculation Manager ${folderNames[artifact.kind]}`
+        : `/Planning/${artifact.application}/${artifact.planType}/${folderNames[artifact.kind]}`;
+      items.push({ artifact, folder });
+      const parts = folder.slice(1).split("/");
+      for (let n = 1; n <= parts.length; n++) folderSet.add(`/${parts.slice(0, n).join("/")}`);
+      const path = `${category}/resource${folder}/${resourceName(artifact.name)}${deployed ? ".xml" : ""}`;
+      if (files.has(path)) throw new SnapshotError("RESOURCE_COLLISION", `Resource collision: ${path}.`);
+      const root = cloneXml(artifact.root);
+      if (deployed && artifact.kind === "rule") {
+        const rule = elements(first(root, "rules")!, "rule")
+          .find((node) => node.attrs.name === artifact.name);
+        const script = rule && first(rule, "script");
+        if (!script) throw new SnapshotError("SCRIPT_ROUND_TRIP", "Planning rule script is missing.");
+        setText(script, effectiveBody);
+      }
+      files.set(path, xmlBytes(root));
+      add(listing, "resource", {
+        name: artifact.name, id: artifact.name,
+        type: artifact.kind.charAt(0).toUpperCase() + artifact.kind.slice(1), cloneOnly: "false",
+        size: "", path: folder, pathAlias: folder, modifiedBy: "", lastUpdated: "",
+        description: deployed ? "" : propertyValue(artifact.element, "description") ?? "",
+      });
+    }
+    for (const folder of [...folderSet].sort())
+      add(listing, "folder", { name: folder.slice(folder.lastIndexOf("/") + 1), type: "Folder",
+        size: "", id: "", path: folder, pathAlias: "", modifiedBy: "", lastUpdated: "", description: "" });
+    files.set(`${category}/Import.xml`, packageXml([{
+      source: { type: "FileSystem", filePath: "/" }, target, items,
+    }], true));
+    files.set(`${category}/info/sourceInfo.xml`, sourceInfo(request.application, deployed));
+    files.set(`${category}/info/listing.xml`, xmlBytes(listing, true));
+    exportTasks.push({ source: target, target: filesystem, items });
+    importTasks.push({ source: filesystem, target, items });
   }
-  for (const folder of [...folderSet].sort())
-    add(listing, "folder", { name: folder.slice(folder.lastIndexOf("/") + 1), type: "Folder",
-      size: "", id: "", path: folder, pathAlias: "", modifiedBy: "", lastUpdated: "", description: "" });
-  files.set(`${category}/Import.xml`, packageXml([{
-    source: { type: "FileSystem", filePath: "/" }, target, items,
-  }], true));
-  files.set(`${category}/info/sourceInfo.xml`, sourceInfo());
-  files.set(`${category}/info/listing.xml`, xmlBytes(listing, true));
-  files.set("Export.xml", packageXml([{ source: target, target: filesystem, items }], false));
-  files.set("Import.xml", packageXml([{ source: filesystem, target, items }], true));
+  files.set("Export.xml", packageXml(exportTasks, false));
+  files.set("Import.xml", packageXml(importTasks, true));
   return files;
 }

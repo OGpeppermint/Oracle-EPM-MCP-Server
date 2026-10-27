@@ -5,7 +5,7 @@ import { createRule, CreateRuleError } from "../dist/create-rule.js";
 const input = { application: "APP1", planType: "Plan1", name: "NewRule", script: '"X" = 1;' };
 const bytes = Buffer.from("PK\x03\x04fixture", "binary");
 const build = async (request) => {
-  assert.equal(request.mode, "calc");
+  assert.equal(request.mode, "combined");
   assert.equal(request.application, "APP1");
   return { bytes, sha256: "fixture-sha", filename: "fixture.zip", artifacts: [{
     kind: "rule", application: "APP1", plan_type: "Plan1", name: "NewRule",

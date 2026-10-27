@@ -188,7 +188,7 @@ Retrieves detailed processing records for an existing Planning import or export 
 
 ### `create-epm-rule`
 
-Creates one Calculation Manager rule in a single MCP call. The server validates the supplied rule, builds a CALC-only LCM ZIP in memory, uploads it to Oracle EPM, imports it, and polls asynchronous extraction/import jobs before returning success. The tool neither deploys nor executes the rule. Use a new rule name for create-only behavior: Oracle's import may affect a same-named artifact.
+Creates one Calculation Manager rule in a single MCP call. The server validates the supplied rule, builds an LCM ZIP with `CALC-Calculation Manager` authoring and `HP-{application}` Planning rule artifacts in memory, uploads it to Oracle EPM, imports it, and polls asynchronous extraction/import jobs before returning success. The Planning artifact allows the import to restore the rule to Planning. The tool does not execute the rule. Use a new rule name for create-only behavior: Oracle's import may affect a same-named artifact.
 
 - `application` (optional string): target application; defaults to `EPM_APPLICATION`.
 - `planType` (required string): exact cube/plan-type name.
@@ -199,7 +199,7 @@ Creates one Calculation Manager rule in a single MCP call. The server validates 
 - `rtps` (optional array): definitions of run-time prompts referenced by the script. Each item needs `name` and `type`; supported types are `str`, `num`, `percent`, `member`, `members`, `dimension`, `cellref`, `str_as_num`, `date_as_num`, `member_range`, and `integer`. Optional fields cover scope, dimension, defaults, labels, validation, limits, and cell-reference prompts. Supply actual definitions rather than only prompt names.
 - `dependencies` (optional array): explicit Script or Template bodies used by the rule. Each item needs `kind` (`script` or `template`), `name`, and `script`; `language` and `description` are optional. These artifacts are imported with the rule.
 - Reference syntax: Calc Script RTPs use `{PromptName}`. Script/Template references use `%Script(...)` or `%Template(...)` and need matching `dependencies`. Groovy RTP declarations use a `/*RTPS: {PromptName}*/` header in the first 25 lines. Missing or unused RTP definitions and unresolved dependency references fail snapshot validation before any Oracle request.
-- Returns: `structuredContent.data` with `stage: "import_completed"`, application, cube, rule name, generated `snapshotName`, available Oracle job IDs, snapshot SHA-256, and packaged artifact list. This confirms Oracle reported a successful snapshot import, not rule deployment or execution.
+- Returns: `structuredContent.data` with `stage: "import_completed"`, application, cube, rule name, generated `snapshotName`, available Oracle job IDs, snapshot SHA-256, and packaged artifact list. This confirms Oracle reported a successful snapshot import. The tool does not independently query the rule's deployment status or execute it.
 - Failure: an MCP error with `structuredContent.error` containing `code`, `stage` (`snapshot`, `upload`, `extraction`, or `import`), available job IDs, and `outcomeUncertain`. A timeout or network error after upload may leave work in progress; inspect the returned job ID before retrying.
 
 The snapshot builder runs in TypeScript within the server process. `EPM_CREATE_RULE_POLL_TIMEOUT_MS` defaults to five minutes. The builder has no local-pod mode and makes no Oracle request; the Oracle client performs upload and import using the server's existing credentials.

@@ -45,7 +45,7 @@ export const snapshotRequestSchema = z.strictObject({
   language: z.enum(["calcscript", "groovy"]).default("calcscript"),
   description: text.default(""), rtps: z.array(rtpSchema).max(256).default([]),
   dependencies: z.array(dependencySchema).max(128).default([]),
-  mode: z.literal("calc").default("calc"),
+  mode: z.enum(["calc", "combined"]).default("combined"),
 });
 export type SnapshotRequest = z.infer<typeof snapshotRequestSchema>;
 

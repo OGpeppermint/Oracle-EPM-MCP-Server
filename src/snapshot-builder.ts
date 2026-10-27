@@ -14,7 +14,7 @@ export type SnapshotBuild = {
   entryCount: number;
 };
 
-/** Create only the CALC authoring snapshot. Oracle I/O belongs to createRule. */
+/** Build the authoring and Planning LCM artifacts in memory. Oracle I/O belongs to createRule. */
 export async function buildRuleSnapshot(input: Record<string, unknown>): Promise<SnapshotBuild> {
   const request: SnapshotRequest = validateSnapshotRequest(input);
   const dependencies = request.dependencies.map((dependency, index) => createArtifact(
@@ -37,7 +37,7 @@ export async function buildRuleSnapshot(input: Record<string, unknown>): Promise
   embedDependencies(rule, dependencies);
   verifyRtps(rule.root, rule.element, request);
   const artifacts = [...dependencies, rule];
-  const files = buildFiles(request, artifacts);
+  const files = buildFiles(request, artifacts, effectiveBody);
   const bytes = zipBytes(files);
   if (bytes.length > 32 * 1024 * 1024)
     throw new EpmOperationError("SNAPSHOT_OUTPUT_LIMIT", "Generated snapshot exceeds the supported size.");

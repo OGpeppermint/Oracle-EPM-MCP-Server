@@ -111,7 +111,7 @@ export async function createRule(input: CreateRuleInput, deps: CreateRuleDepende
     const snapshot = await build({
       application, plan_type: input.planType, name: input.name, script: input.script,
       language: input.language ?? "calcscript", description: input.description ?? "",
-      rtps: input.rtps ?? [], dependencies: input.dependencies ?? [], mode: "calc",
+      rtps: input.rtps ?? [], dependencies: input.dependencies ?? [], mode: "combined",
     });
     snapshotName = `mcp-rule-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const filename = `${snapshotName}.zip`;
