@@ -4,12 +4,16 @@ import { z } from "zod";
 import { getRequestId, log, withRequestContext } from "./logging.js";
 import { epmRequest, EpmOperationError } from "./oracle-client.js";
 import { createRule, createRuleInputSchema, CreateRuleError } from "./create-rule.js";
+import { beginOracleLogin, oracleLoginStatus } from "./oracle-oauth.js";
+import { oracleAuthMode } from "./config.js";
 
 const connectionSchema = z.object({
   configured: z.boolean().describe("True only when all required Oracle EPM environment variables are present on the MCP server."),
   baseUrl: z.string().optional().describe("Configured Oracle Cloud EPM origin. The password and authorization header are never returned."),
   application: z.string().optional().describe("Configured Oracle EPM Planning application name, such as NSPB."),
   username: z.string().optional().describe("Masked service-account username for troubleshooting; this is never the password."),
+  authMode: z.enum(["basic", "oauth"]),
+  signedIn: z.boolean().describe("Whether local OAuth sign-in is available for Oracle requests, or Basic credentials are configured."),
   missing: z.array(z.string()).describe("Required server environment-variable names that are absent. Empty when configured is true."),
 }).describe("Sanitized server-side Oracle EPM connection configuration status.");
 
@@ -37,15 +41,20 @@ function maskUsername(value: string | undefined): string | undefined {
 }
 
 function connectionStatus() {
+  const authMode = oracleAuthMode();
   const values = {
     EPM_BASE_URL: process.env.EPM_BASE_URL?.replace(/\/$/, ""),
     EPM_USERNAME: process.env.EPM_USERNAME,
     EPM_PASSWORD: process.env.EPM_PASSWORD,
     EPM_APPLICATION: process.env.EPM_APPLICATION?.trim() || undefined,
   };
-  const missing = (["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"] as const).filter((key) => !values[key]);
+  const required = authMode === "oauth" ? ["EPM_BASE_URL", "EPM_OAUTH_DOMAIN_URL", "EPM_OAUTH_CLIENT_ID", "EPM_OAUTH_SCOPE"]
+    : ["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"];
+  const missing = required.filter((key) => !process.env[key]);
   return {
     configured: missing.length === 0,
+    authMode,
+    signedIn: oracleLoginStatus().signedIn,
     baseUrl: values.EPM_BASE_URL,
     application: values.EPM_APPLICATION,
     username: maskUsername(values.EPM_USERNAME),
@@ -337,6 +346,17 @@ export function createServer(): McpServer {
   }));
 
   // Generic job and business-rule execution remain intentionally unregistered.
+
+  server.registerTool("start-epm-login", {
+    title: "Sign In to Oracle EPM",
+    description: "Open the Oracle identity-domain sign-in page for this local MCP server. Complete sign-in in the browser, then call get-epm-connection-status to confirm signedIn is true. The authorization URL is also returned if the browser does not open. Available only when EPM_AUTH_MODE=oauth.",
+    inputSchema: {},
+    outputSchema: { data: z.object({ authorizationUrl: z.string(), browserOpened: z.boolean(), expiresAt: z.string() }) },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async () => observeTool("Oracle browser sign-in", () => {
+    const data = beginOracleLogin();
+    return textResult(`Complete Oracle sign-in in your browser. If it did not open, use ${data.authorizationUrl}`, { data });
+  }));
 
   server.registerTool("get-epm-connection-status", {
     title: "Get Oracle EPM Connection Configuration Status",

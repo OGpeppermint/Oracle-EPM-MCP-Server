@@ -1,19 +1,19 @@
 # Oracle EPM NSPB MCP tool reference
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
-The server exposes 15 active tools: 14 read-only tools plus `create-epm-rule`, which imports one Calculation Manager rule. Job and business-rule execution remain unavailable.
+The server exposes 16 active tools: 14 read-only tools, `create-epm-rule`, and `start-epm-login`. Job and business-rule execution remain unavailable.
 
 ## Common behavior
 
 - Oracle credentials come only from the MCP server environment and are never accepted as tool arguments or returned in results.
-- HTTP and stdio startup require a valid HTTPS Oracle origin and nonblank username and password. Invalid configuration exits before a transport opens; startup validation makes no Oracle request. `EPM_APPLICATION` remains optional.
+- HTTP and stdio startup require a valid HTTPS Oracle origin and either Basic credentials or local OAuth configuration. Invalid configuration exits before a transport opens; startup validation makes no Oracle request. `EPM_APPLICATION` remains optional.
 - When an `application` argument is optional, omitting it uses `EPM_APPLICATION` from the server environment.
 - The 13 read-only Oracle API tools return model-readable text plus `structuredContent.data`, which contains Oracle's JSON response.
 - `get-epm-connection-status` returns sanitized connection configuration and `checkedAt` directly in `structuredContent`.
 - Oracle API, authentication, authorization, timeout, and network failures return an MCP error result with safe text and a request ID. Raw Oracle error bodies, URLs, headers, parser exceptions, and stack traces are excluded.
 - Tool results include `_meta.requestId`; failures also include `_meta.errorCode`. HTTP calls share the ID returned in the `X-Request-Id` response header; stdio calls receive independent IDs. Match IDs to the JSON application logs on stderr.
-- `create-epm-rule` writes a rule through Oracle's snapshot upload and import APIs. All other active tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
+- `create-epm-rule` writes a rule through Oracle's snapshot upload and import APIs. `start-epm-login` begins a local browser sign-in. Other tools are read-only in intent. `export-epm-data-slice` uses HTTP `POST` because Oracle's read API requires it, but it does not write Planning data.
 - Oracle operations share a configurable 30-second total deadline across attempts and retry waits. Eligible GET requests retry transient network failures and HTTP 429/502/503/504 up to twice, with exponential backoff, jitter, and respect for `Retry-After`. POST exports, authentication/permission errors, invalid responses, and size-limit failures are not retried.
 - Oracle response bodies are limited to 5 MiB by default, counted as decoded bytes while downloading. An oversized response is cancelled and returned as `EPM_RESPONSE_TOO_LARGE`, without partial data. Use pagination, field selection, or a narrower data slice. See the [configuration reference](../README.md#oracle-request-limits-and-retries) for settings and bounds.
 
@@ -36,6 +36,7 @@ The server exposes 15 active tools: 14 read-only tools plus `create-epm-rule`, w
 | `export-epm-data-slice` | Read a targeted multidimensional Planning grid. | Model |
 | `create-epm-rule` | Build, upload, and import one Calculation Manager rule snapshot; wait for the import result. | Model |
 | `get-epm-connection-status` | Check sanitized local connection configuration without calling Oracle. | Model |
+| `start-epm-login` | Open local Oracle browser sign-in with PKCE; return the authorization URL as a fallback. | Model |
 
 ## Discovery and application context
 

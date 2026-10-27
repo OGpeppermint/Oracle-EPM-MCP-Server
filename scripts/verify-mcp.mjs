@@ -10,6 +10,7 @@ const expectedTools = [
   "list-epm-substitution-variables", "get-epm-substitution-variable", "export-epm-data-slice",
   "get-epm-connection-status",
   "create-epm-rule",
+  "start-epm-login",
 ];
 const client = new Client({ name: "oracle-epm-server-verifier", version: "1.0.0" });
 const root = path.resolve(import.meta.dirname, "..");
@@ -29,7 +30,7 @@ try {
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map(({ name }) => name).sort(), [...expectedTools].sort());
   for (const tool of tools) {
-    assert.equal(tool.annotations?.readOnlyHint, tool.name !== "create-epm-rule", `${tool.name} has the wrong read-only annotation`);
+    assert.equal(tool.annotations?.readOnlyHint, !["create-epm-rule", "start-epm-login"].includes(tool.name), `${tool.name} has the wrong read-only annotation`);
     assert.equal(tool._meta?.ui, undefined, `${tool.name} must not link a GUI`);
     assert.equal(tool._meta?.["ui/resourceUri"], undefined);
   }

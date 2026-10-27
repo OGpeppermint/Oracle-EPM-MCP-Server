@@ -44,6 +44,8 @@ Release tests must cover absent and malformed tokens, invalid signatures, wrong 
 
 ## Phase 2: outbound Oracle EPM OAuth
 
+The local single-user server now supports an in-memory Authorization Code + PKCE flow through `start-epm-login` and a loopback callback. The items below remain the roadmap for a hosted, multi-user deployment; the local flow does not provide inbound MCP authentication or durable token storage.
+
 - Register the appropriate integrated OAuth client in the tenant's Oracle Identity Domain.
 - Configure EPM as a resource with the required secondary audience and token-issuance policy.
 - Apply Oracle's July 2026 EPM OAuth configuration requirements before enabling production tenants.

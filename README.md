@@ -5,7 +5,7 @@ MCP server for Oracle EPM Planning / NSPB. It exposes application discovery, met
 ## Setup
 
 1. Install Node.js 22.9 or newer, then run `npm install`.
-2. Copy `.env.example` to `.env` and provide the Oracle EPM service account and application name.
+2. Copy `.env.example` to `.env` and configure either Basic credentials or local Oracle browser sign-in. Set an optional application name.
 3. Run `npm run build` then `npm start`, or `npm run dev` during development.
 4. Connect any MCP host to `http://127.0.0.1:3001/mcp`. For stdio, use `npm run start:stdio`.
 
@@ -13,7 +13,15 @@ All npm server startup commands load the project-root `.env` automatically. Exis
 
 When an MCP client launches Node directly, use `node --env-file-if-exists=/absolute/path/to/.env /absolute/path/to/dist/main.js --stdio`, or provide the variables through the client's environment settings.
 
-Oracle credentials are used only by the server.
+Oracle credentials and OAuth tokens are used only by the server.
+
+### Local Oracle browser sign-in
+
+For a local single-user server, an Identity Domain administrator must register a **public** OAuth client that allows Authorization Code with PKCE and Refresh Token. Grant it the EPM service-specific resource scope, register the exact loopback redirect URI `http://127.0.0.1:3002/oauth/epm/callback` (or your chosen callback port), and configure the EPM service's secondary audience as its base URL with token refresh enabled. The signed-in Oracle user needs the EPM roles required by the tools they call. [Oracle EPM OAuth setup](https://docs.oracle.com/en/cloud/saas/enterprise-performance-management-common/prest/authentication_oath.html) and [Oracle authorization-code flow](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/AuthCodeGT.htm) describe the identity-domain setup.
+
+Set `EPM_AUTH_MODE=oauth`, `EPM_BASE_URL`, `EPM_OAUTH_DOMAIN_URL`, `EPM_OAUTH_CLIENT_ID`, and `EPM_OAUTH_SCOPE` in `.env`. The scope is the exact service-specific `urn:opc:serviceInstanceID=...urn:opc:resource:consumer::all` value from Oracle. Leave Basic username/password unset. Start the server, call `start-epm-login`, and finish Oracle sign-in in the opened browser. If no browser opens, follow the URL returned by the tool. `get-epm-connection-status` reports `signedIn: true` after the callback succeeds. Then use tools such as `create-epm-rule` normally.
+
+The callback listener binds only to `127.0.0.1`, on port `3002` by default, in both HTTP and stdio modes. `HOST` must also be loopback in HTTP OAuth mode. Access and refresh tokens live in server memory and are cleared on shutdown, so sign in again after restarting. Refresh is automatic while the session is valid. This local OAuth mode is for one trusted user; do not expose the MCP endpoint through a remote proxy. It does not add authentication for incoming MCP clients.
 
 ## Separate GUI project
 
@@ -27,6 +35,7 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 - `src/logging.ts` provides JSON logging and request correlation.
 - `src/server.ts` defines the MCP tools.
 - `src/oracle-client.ts` handles Oracle requests, deadlines, retries, response limits, and cancellation.
+- `src/oracle-oauth.ts` handles local browser sign-in, PKCE, token refresh, and the loopback callback.
 - `src/create-rule.ts` orchestrates one rule snapshot upload and import.
 - `src/snapshot-*.ts` validates rule inputs and builds the LCM XML and ZIP entirely in memory.
 - `scripts/` contains MCP verification and dependency-notice tooling.
@@ -41,6 +50,11 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 | `EPM_BASE_URL` | Oracle Cloud EPM origin, without a trailing slash |
 | `EPM_USERNAME` | Service-account username |
 | `EPM_PASSWORD` | Service-account password |
+| `EPM_AUTH_MODE` | `basic` (default) or `oauth` for local browser sign-in |
+| `EPM_OAUTH_DOMAIN_URL` | Oracle Identity Domain HTTPS origin; required in OAuth mode |
+| `EPM_OAUTH_CLIENT_ID` | Registered public OAuth client ID; required in OAuth mode |
+| `EPM_OAUTH_SCOPE` | Exact EPM service-specific resource scope; required in OAuth mode |
+| `EPM_OAUTH_CALLBACK_PORT` | Local OAuth callback port; defaults to `3002` |
 | `EPM_APPLICATION` | Optional default Planning application name, such as `NSPB`; tools can supply an explicit application |
 | `EPM_REQUEST_TIMEOUT_MS` | Total Oracle operation deadline, including retries; defaults to `30000` milliseconds |
 | `EPM_MAX_RETRIES` | Additional attempts for eligible GET failures; defaults to `2`, or `0` to disable |
@@ -54,9 +68,9 @@ The Command Center GUI is maintained in the separate `NSPB-Command-Center` repos
 
 For a container or remote deployment, set `HOST=0.0.0.0` and set `MCP_ALLOWED_HOSTS` to the hostnames used to reach the service, for example `mcp.example.com,localhost,127.0.0.1`. Allowlist entries contain no scheme, port, or path; IPv6 entries use brackets. Configure the reverse proxy and health probes to send an allowed Host header. The allowlist applies to both `/mcp` and `/health`.
 
-Both HTTP and stdio startup require a nonblank `EPM_BASE_URL`, `EPM_USERNAME`, and `EPM_PASSWORD`. The URL must be an HTTPS origin with no embedded credentials, path, query, or fragment; an optional trailing slash is normalized away. Invalid configuration exits with code 1 and an error listing setting names and expected formats, without echoing supplied values. Startup validation does not contact Oracle or verify credentials.
+Both HTTP and stdio startup require a nonblank `EPM_BASE_URL`. Basic mode also requires `EPM_USERNAME` and `EPM_PASSWORD`; OAuth mode requires the Identity Domain URL, client ID, and service scope above. The EPM URL must be an HTTPS origin with no embedded credentials, path, query, or fragment; an optional trailing slash is normalized away. Invalid configuration exits with code 1 and an error listing setting names and expected formats, without echoing supplied values. Startup validation does not contact Oracle or verify credentials.
 
-`EPM_APPLICATION` can be omitted for application discovery. Application-specific tools then require an explicit `application` argument. Connection status considers the three required Oracle settings, independently of whether a default application is set.
+`EPM_APPLICATION` can be omitted for application discovery. Application-specific tools then require an explicit `application` argument. Connection status reports configuration and current sign-in state independently of whether a default application is set.
 
 In HTTP mode, `HOST` must be a hostname or unbracketed IP address, `PORT` must be an integer from 0 to 65535 (0 selects a temporary port), and `MCP_ALLOWED_HOSTS` must contain valid hostnames or IP addresses with no empty entries or wildcards. Omit HTTP settings to use their defaults. Stdio mode ignores HTTP-only settings.
 

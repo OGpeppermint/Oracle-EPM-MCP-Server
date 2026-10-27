@@ -237,7 +237,7 @@ for (const allowedOrigins of [browserOrigins, []]) {
         s.after(() => client.close());
         await client.connect(transport);
         assert.equal(transport.sessionId, undefined);
-        assert.equal((await client.listTools()).tools.length, 15);
+        assert.equal((await client.listTools()).tools.length, 16);
         const result = await client.callTool({ name: "get-epm-connection-status", arguments: {} });
         assert.ok(!result.isError);
         assert.equal(result.structuredContent.connection.configured, true);
@@ -254,7 +254,7 @@ for (const allowedOrigins of [browserOrigins, []]) {
         jsonError(await post(message(1), { headers: { "Content-Type": contentType } }), 415, -32000);
       }
       const response = await post(message("charset"), { headers: { "Content-Type": "application/json; charset=utf-8" } });
-      assert.equal(rpcResponse(response, "charset").result.tools.length, 15);
+      assert.equal(rpcResponse(response, "charset").result.tools.length, 16);
     });
 
     await t.test("JSON parser rejects malformed, oversized, and unsupported-encoding bodies safely", async () => {
@@ -318,7 +318,7 @@ for (const allowedOrigins of [browserOrigins, []]) {
     await t.test("subsequent protocol headers accept supported versions and reject unsupported values", async () => {
       for (const version of [undefined, "2025-03-26", "2025-06-18", protocolVersion]) {
         const reply = rpcResponse(await post(message(1), { headers: { "MCP-Protocol-Version": version } }), 1);
-        assert.equal(reply.result.tools.length, 15);
+        assert.equal(reply.result.tools.length, 16);
       }
       for (const version of ["2099-01-01", "invalid", ""]) {
         const headers = { "MCP-Protocol-Version": version };
@@ -349,7 +349,7 @@ for (const allowedOrigins of [browserOrigins, []]) {
       const removed = await request("/mcp", { method: "DELETE", headers: { "MCP-Protocol-Version": protocolVersion } });
       assert.equal(removed.status, 200);
       assert.equal(removed.body, "");
-      assert.equal(rpcResponse(await post(message("after-delete")), "after-delete").result.tools.length, 15);
+      assert.equal(rpcResponse(await post(message("after-delete")), "after-delete").result.tools.length, 16);
     });
 
     await t.test("unsupported HTTP methods return method errors and an Allow header", async () => {
@@ -373,7 +373,7 @@ for (const allowedOrigins of [browserOrigins, []]) {
             assert.equal(reply.result.structuredContent.connection.configured, true);
             assert.equal(reply.result.structuredContent.connection.username, "ht****");
             assert.equal(reply.result._meta.requestId, response.headers["x-request-id"]);
-          } else assert.equal(reply.result.tools.length, 15);
+          } else assert.equal(reply.result.tools.length, 16);
           return response.headers["x-request-id"];
         });
       });

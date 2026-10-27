@@ -5,17 +5,19 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import cors from "cors";
 import type { ErrorRequestHandler, Request, Response } from "express";
 import { createServer as createHttpServer } from "node:http";
-import { ConfigurationError, readHttpConfig, readOracleRequestConfig, validateOracleConfig, type HttpConfig } from "./config.js";
+import { ConfigurationError, oracleAuthMode, readHttpConfig, readOracleRequestConfig, validateOracleConfig, type HttpConfig } from "./config.js";
 import { createServer } from "./server.js";
 import { closeOracleRequests } from "./oracle-client.js";
 import { manageHttpShutdown } from "./shutdown.js";
 import { handleHttpRequest, log } from "./logging.js";
+import { startOracleOAuthListener, stopOracleOAuthListener } from "./oracle-oauth.js";
 
 async function startHttp(factory: () => McpServer, { host, port, allowedHosts, allowedOrigins, shutdownTimeoutMs }: HttpConfig): Promise<void> {
   const app = createMcpExpressApp({ host, allowedHosts });
   const listener = createHttpServer((req, res) => handleHttpRequest(req, res, () => { app(req, res); }));
   const lifecycle = manageHttpShutdown(listener, shutdownTimeoutMs);
   lifecycle.track(closeOracleRequests);
+  lifecycle.track(stopOracleOAuthListener);
   app.use((_req, res, next) => {
     if (lifecycle.shuttingDown) {
       res.setHeader("Connection", "close");
@@ -82,12 +84,20 @@ async function startHttp(factory: () => McpServer, { host, port, allowedHosts, a
 try {
   process.env.EPM_BASE_URL = validateOracleConfig();
   readOracleRequestConfig();
-  if (process.argv.includes("--stdio")) {
-    await createServer().connect(new StdioServerTransport());
+  const stdio = process.argv.includes("--stdio");
+  const http = stdio ? undefined : readHttpConfig();
+  if (http && oracleAuthMode() === "oauth" && !["127.0.0.1", "::1", "localhost"].includes(http.host.toLowerCase()))
+    throw new ConfigurationError(["OAuth browser sign-in requires local HTTP binding (HOST=127.0.0.1, ::1, or localhost)."]);
+  await startOracleOAuthListener();
+  if (stdio) {
+    const transport = new StdioServerTransport();
+    transport.onclose = () => { void stopOracleOAuthListener(); };
+    await createServer().connect(transport);
   } else {
-    await startHttp(createServer, readHttpConfig());
+    await startHttp(createServer, http!);
   }
 } catch (error) {
+  await stopOracleOAuthListener().catch(() => {});
   if (error instanceof ConfigurationError) {
     log("error", "server.configuration.invalid", { errorCode: "CONFIGURATION_INVALID", message: error.message });
   } else {

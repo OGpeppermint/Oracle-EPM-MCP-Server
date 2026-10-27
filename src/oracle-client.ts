@@ -1,6 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { readOracleRequestConfig } from "./config.js";
+import { oracleAuthMode, readOracleRequestConfig } from "./config.js";
 import { log } from "./logging.js";
+import { oracleAuthorizationHeader } from "./oracle-oauth.js";
 
 const activeOracleRequests = new Map<AbortController, Promise<unknown>>();
 const retryStatuses = new Set([429, 502, 503, 504]);
@@ -15,7 +16,7 @@ export class EpmOperationError extends Error {
 
 export class EpmHttpError extends EpmOperationError {
   constructor(status: number) {
-    const guidance = status === 401 ? "Check the server's Oracle credentials."
+    const guidance = status === 401 ? (oracleAuthMode() === "oauth" ? "Check the Oracle user's EPM access, token scope, and service secondary audience; sign in again if needed." : "Check the server's Oracle credentials.")
       : status === 403 ? "Check the Oracle service account's access permissions."
       : status === 404 ? "Check that the requested Oracle resource exists."
       : status === 429 ? "Oracle is rate limiting requests; try again later."
@@ -91,11 +92,10 @@ export async function epmRequest<T>(
   init?: RequestInit,
   { summaryFallback = false }: { summaryFallback?: boolean } = {},
 ): Promise<T> {
-  const missing = ["EPM_BASE_URL", "EPM_USERNAME", "EPM_PASSWORD"].filter((key) => !process.env[key]);
-  if (missing.length) throw new EpmOperationError("EPM_CONFIGURATION_MISSING", `Oracle EPM authentication is not configured. Missing: ${missing.join(", ")}`);
+  if (!process.env.EPM_BASE_URL) throw new EpmOperationError("EPM_CONFIGURATION_MISSING", "Oracle EPM base URL is not configured.");
   const config = readOracleRequestConfig();
   const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Basic ${Buffer.from(`${process.env.EPM_USERNAME}:${process.env.EPM_PASSWORD}`).toString("base64")}`);
+  headers.set("Authorization", await oracleAuthorizationHeader());
   headers.set("Accept", "application/json");
   if (init?.body === undefined) headers.delete("Content-Type");
   else if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");

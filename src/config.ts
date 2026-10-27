@@ -21,6 +21,44 @@ export type OracleRequestConfig = {
   maxResponseBytes: number;
 };
 
+export type OracleAuthMode = "basic" | "oauth";
+
+export function oracleAuthMode(env: NodeJS.ProcessEnv = process.env): OracleAuthMode {
+  const mode = env.EPM_AUTH_MODE?.trim().toLowerCase() || "basic";
+  if (mode !== "basic" && mode !== "oauth") throw new ConfigurationError(["EPM_AUTH_MODE must be basic or oauth."]);
+  return mode;
+}
+
+export type OAuthConfig = {
+  domainUrl: string;
+  clientId: string;
+  scope: string;
+  callbackPort: number;
+};
+
+export function readOAuthConfig(env: NodeJS.ProcessEnv = process.env): OAuthConfig {
+  const issues: string[] = [];
+  const rawDomain = env.EPM_OAUTH_DOMAIN_URL?.trim() ?? "";
+  let domainUrl = "";
+  try {
+    const url = new URL(rawDomain);
+    if (!/^https:\/\/[^/?#\\]+\/?$/i.test(rawDomain) || /[\s\\@?#]/.test(rawDomain)
+      || url.protocol !== "https:" || url.pathname !== "/" || url.username || url.password || url.search || url.hash) throw new Error();
+    domainUrl = url.origin;
+  } catch { issues.push("EPM_OAUTH_DOMAIN_URL must be the HTTPS origin of the Oracle identity domain."); }
+  const clientId = env.EPM_OAUTH_CLIENT_ID?.trim() ?? "";
+  if (!clientId) issues.push("EPM_OAUTH_CLIENT_ID is required for OAuth.");
+  const scope = env.EPM_OAUTH_SCOPE?.trim() ?? "";
+  if (!/^urn:opc:serviceInstanceID=\S+urn:opc:resource:consumer::all$/.test(scope))
+    issues.push("EPM_OAUTH_SCOPE must be the EPM service-specific resource scope.");
+  const rawPort = env.EPM_OAUTH_CALLBACK_PORT?.trim() ?? "3002";
+  const callbackPort = Number(rawPort);
+  if (!/^\d+$/.test(rawPort) || !Number.isInteger(callbackPort) || callbackPort < 1 || callbackPort > 65535)
+    issues.push("EPM_OAUTH_CALLBACK_PORT must be an integer from 1 to 65535.");
+  if (issues.length) throw new ConfigurationError(issues);
+  return { domainUrl, clientId, scope, callbackPort };
+}
+
 export function readOracleRequestConfig(env: NodeJS.ProcessEnv = process.env): OracleRequestConfig {
   const issues: string[] = [];
   const integer = (key: string, fallback: number, minimum: number, maximum: number): number => {
@@ -68,9 +106,11 @@ export function validateOracleConfig(env: NodeJS.ProcessEnv = process.env): stri
       issues.push("EPM_BASE_URL must be a valid HTTPS origin without embedded credentials, a path, a query, or a fragment.");
     }
   }
-  for (const key of ["EPM_USERNAME", "EPM_PASSWORD"] as const) {
+  const mode = oracleAuthMode(env);
+  if (mode === "basic") for (const key of ["EPM_USERNAME", "EPM_PASSWORD"] as const) {
     if (!env[key]?.trim()) issues.push(`${key} is required and must not be blank. Set it in the environment or .env file.`);
   }
+  else readOAuthConfig(env);
   // EPM_APPLICATION is optional: discovery and explicit application arguments work without it.
   if (issues.length) throw new ConfigurationError(issues);
   return origin;
